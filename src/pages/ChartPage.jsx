@@ -1,5 +1,5 @@
 import '../App.css'
-import {useEffect, useState} from "react";
+import {useEffect, useRef, useState} from "react";
 import getUserInfo from "../getUserInfo.js";
 import {getScrobblingDataForAllPeriods} from "../getScrobblingDataForAllPeriods.js";
 import HighchartsReact from "highcharts-react-official";
@@ -55,58 +55,11 @@ class Artist {
                 periodRankingPositions.push(null);
             }
         })
+
         this.cumulativeScrobbleData = cumulativeScrobbleData;
         this.noncumulativeScrobbleData = noncumulativeScrobbleData;
         this.periodRankingPositions = periodRankingPositions;
     }
-}
-
-const formatScrobblingData = (scrobblingData) => {
-    let listOfItemNames = [];
-
-    // Note "item" in this context refers to either an artist, album, or track
-
-    scrobblingData.map(period => {
-        period.map(item => {
-            if (listOfItemNames.includes(item.name)){
-                // Ignore
-            } else {
-                listOfItemNames.push(item.name)
-            }
-        })
-    })
-
-    let formattedScrobblingData = [];
-
-    listOfItemNames.map(itemName => {
-        let item = new Artist(itemName)
-        item.calculateTotalScrobbles(scrobblingData)
-        item.calculateLongitudinalData(scrobblingData)
-
-        formattedScrobblingData.push(item);
-    })
-
-    return formattedScrobblingData;
-}
-
-const generateScrobblingPeriods = (startingUnix) => {
-    const endingUnix = Date.now() / 1000;
-    const weekInSeconds = 604800;
-
-    let scrobblingPeriods = [];
-
-    //Generate "from" and "to" unix timestamps for api requests
-    for (let scrobblingPeriod = startingUnix; scrobblingPeriod < endingUnix; scrobblingPeriod += weekInSeconds) {
-        let fromUnix = scrobblingPeriod;
-        let toUnix = scrobblingPeriod + weekInSeconds;
-
-        scrobblingPeriods.push({
-            fromUnix: fromUnix,
-            toUnix: toUnix,
-            fromDate: new Date(fromUnix * 1000).toUTCString(),
-            toDate: new Date(toUnix * 1000).toUTCString()});
-    }
-    return scrobblingPeriods;
 }
 
 function ChartPage() {
@@ -117,14 +70,15 @@ function ChartPage() {
     const [activeItems, setActiveItems] = useState([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
     const [dataPresentationMode, setDataPresentationMode] = useState('cumulativeScrobbleData');
     const [chartType, setChartType] = useState('line');
-    const [smoothStrength, setSmoothStrength] = useState(0);
+
+    const chartRef = useRef()
 
     const [chartOptions, setChartOptions] = useState(
         {
             chart: {
                 type: chartType,
-                height: '61%',
-                backgroundColor: '#1a202c'
+                backgroundColor: '#1a202c',
+                height: '70%'
             },
             plotOptions: {
                 line: {
@@ -133,29 +87,114 @@ function ChartPage() {
                     }
                 }
             },
+            legend: {
+                itemStyle: {'color':'#eeefef'}
+            },
             title: {
                 text: ''
             },
-            yAxis: {
-                gridLineColor: '#2c323d'
+            xAxis: {
+                labels: {
+                    style: {
+                        color: "#b1b1b1"
+                    }
+                }
             },
-            series: []
+            yAxis: {
+                gridLineColor: '#2c323d',
+                labels: {
+                    style: {
+                        color: "#b1b1b1"
+                    }
+                },
+                title: ""
+            },
+            series: {}
         }
     );
 
-    const generateSeriesData = (noOfSeries) => {
-        let seriesData = [];
+    const formatScrobblingData = (scrobblingData) => {
+        let listOfItemNames = [];
 
-        for (let i = 0; i < noOfSeries; i++){
-            seriesData.push(
-                {
-                    name: scrobblingData[i].name,
-                    data: scrobblingData[i][dataPresentationMode],
+        // Note "item" in this context refers to either an artist, album, or track
+
+        scrobblingData.map(period => {
+            period.map(item => {
+                if (listOfItemNames.includes(item.name)){
+                    // Ignore
+                } else {
+                    listOfItemNames.push(item.name)
                 }
-            )
+            })
+        })
+
+        let formattedScrobblingData = [];
+
+        listOfItemNames.map(itemName => {
+            let item = new Artist(itemName)
+            item.calculateTotalScrobbles(scrobblingData)
+            item.calculateLongitudinalData(scrobblingData)
+
+            formattedScrobblingData.push(item);
+        })
+
+        return formattedScrobblingData;
+    }
+
+    const formatDate = (unixTimestamp) => {
+        let date = new Date(unixTimestamp * 1000)
+
+        let day = date.getDay()
+        let dayOfWeek;
+
+        switch (day) {
+            case 0:
+                dayOfWeek = "Mon"
+                break;
+            case 1:
+                dayOfWeek = "Tue"
+                break;
+            case 2:
+                dayOfWeek = "Wed"
+                break;
+            case 3:
+                dayOfWeek = "Thu"
+                break;
+            case 4:
+                dayOfWeek = "Fri"
+                break;
+            case 5:
+                dayOfWeek = "Sat"
+                break;
+            case 6:
+                dayOfWeek = "Sun"
+                break;
         }
 
-        return seriesData
+        let month = date.toLocaleString('default', { month: 'long' });
+        let year = date.getFullYear();
+
+        return `${month} ${year}`
+    }
+
+    const generateScrobblingPeriods = (startingUnix) => {
+        const endingUnix = Date.now() / 1000;
+        const weekInSeconds = 604800;
+
+        let scrobblingPeriods = [];
+
+        //Generate "from" and "to" unix timestamps for api requests
+        for (let scrobblingPeriod = startingUnix; scrobblingPeriod < endingUnix; scrobblingPeriod += weekInSeconds) {
+            let fromUnix = scrobblingPeriod;
+            let toUnix = scrobblingPeriod + weekInSeconds;
+
+            scrobblingPeriods.push({
+                fromUnix: fromUnix,
+                toUnix: toUnix,
+                fromDate: new Date(fromUnix * 1000).toUTCString(),
+                toDate: new Date(toUnix * 1000).toUTCString()});
+        }
+        return scrobblingPeriods;
     }
 
     useEffect(() => {
@@ -170,21 +209,56 @@ function ChartPage() {
         const scrobblingPeriods = generateScrobblingPeriods(startingUnix);
 
         getScrobblingDataForAllPeriods(username, scrobblingPeriods)
-            .then(response => setScrobblingData(formatScrobblingData(response)))
+            .then(response => {
+                setScrobblingData(formatScrobblingData(response))
+            })
     },[userInfo]);
+
+    const deepCopy = (obj) => {
+        return JSON.parse(JSON.stringify(obj));
+    }
+
+    const getSeriesData = (noOfSeries) => {
+        let seriesData = [];
+        const scrobblingDataCopy = deepCopy(scrobblingData);
+
+        for (let i = 0; i < noOfSeries; i++){
+            seriesData.push(
+                {
+                    name: scrobblingDataCopy[i].name,
+                    data: scrobblingDataCopy[i][dataPresentationMode],
+                }
+            )
+        }
+
+        return seriesData
+    }
 
     useEffect(() => {
         if (scrobblingData === undefined) return;
 
         setChartOptions({
-            ...chartOptions,
-            series: generateSeriesData(10),
+            xAxis: {
+                categories: generateScrobblingPeriods(userInfo.registered['#text']).map(period => (formatDate(period.fromUnix)))
+            },
+            series: getSeriesData(10)
+        })
+    }, [scrobblingData]);
+
+    const updateChartSeries = () => {
+        setChartOptions({
+            series: getSeriesData(10),
             chart: {
-                type: chartType,
+                type: chartType
             }
         })
+    }
 
-    },[scrobblingData, activeItems, dataPresentationMode, chartType])
+    useEffect(() => {
+        scrobblingData &&
+
+        updateChartSeries()
+    },[dataPresentationMode, chartType])
 
     const sortArray = (array) => {
         return array.sort((a, b) => b.totalScrobbles - a.totalScrobbles);
@@ -192,12 +266,12 @@ function ChartPage() {
 
     return (
         <Container maxW={'100%'} p={0} m={0}>
-            <Grid templateColumns={'repeat(6,1fr)'} templateRows={'repeat(5, 1fr)'}>
+            <Grid templateColumns={'repeat(6,1fr)'}>
                 <GridItem colSpan={1}>
                     {
                         scrobblingData &&
                         <>
-                            <HStack alignItems={'center'} justifyContent={'center'} backgroundColor={'gray.900'} pt={2} pb={2} borderRadius={5}>
+                            <HStack alignItems={'center'} justifyContent={'center'} backgroundColor={'gray.900'} pt={2} pb={2}>
                                 <Avatar src={userInfo.image[0]['#text']} size={'sm'}/>
                                 <Text>{userInfo.name}'s last.fm Data</Text>
                             </HStack>
@@ -214,7 +288,7 @@ function ChartPage() {
                                     <option value={"area"}>Area</option>
                                     <option value={"scatter"}>Scatter</option>
                                 </Select>
-                                <CustomDivider text={'Data Settings'}/>
+                                <CustomDivider text={'Series Entries'}/>
                                 <Select variant={'filled'} maxW={'100%'}>
                                     {
                                         sortArray(scrobblingData).map((item, index) => (
@@ -231,7 +305,7 @@ function ChartPage() {
                                                 borderRadius={'full'}
                                                 variant={'solid'}
                                             >
-                                                <TagLabel>{scrobblingData[item].name}</TagLabel>
+                                                <TagLabel pb={1} pt={1}>{scrobblingData[item].name}</TagLabel>
                                                 <TagCloseButton />
                                             </Tag>
                                         ))
@@ -241,8 +315,8 @@ function ChartPage() {
                         </>
                     }
                 </GridItem>
-                <GridItem colSpan={5}>
-                    <HighchartsReact highcharts={Highcharts} options={chartOptions}/>
+                <GridItem colSpan={5} mt={5}>
+                    <HighchartsReact ref={chartRef} highcharts={Highcharts} options={chartOptions}/>
                 </GridItem>
             </Grid>
         </Container>
