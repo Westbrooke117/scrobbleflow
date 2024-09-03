@@ -9,7 +9,19 @@ import {
     Text,
     Select,
     Box,
-    Container, Grid, GridItem, Avatar, Button, Tag, TagLabel, TagCloseButton
+    Container,
+    Grid,
+    GridItem,
+    Avatar,
+    Button,
+    Tag,
+    TagLabel,
+    TagCloseButton,
+    Checkbox,
+    Switch,
+    Slider,
+    SliderTrack,
+    SliderFilledTrack, SliderThumb
 } from "@chakra-ui/react";
 import {useParams} from "react-router-dom";
 import {CustomDivider} from "../components/CustomDivider.jsx";
@@ -67,9 +79,10 @@ function ChartPage() {
 
     const [userInfo, setUserInfo] = useState();
     const [scrobblingData, setScrobblingData] = useState();
-    const [activeItems, setActiveItems] = useState([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    const [activeItems, setActiveItems] = useState([0, 1, 2, 3, 4]);
     const [dataPresentationMode, setDataPresentationMode] = useState('cumulativeScrobbleData');
     const [chartType, setChartType] = useState('line');
+    const [smoothStrength, setSmoothStrength] = useState(0)
 
     const chartRef = useRef()
 
@@ -218,19 +231,29 @@ function ChartPage() {
         return JSON.parse(JSON.stringify(obj));
     }
 
-    const getSeriesData = (noOfSeries) => {
+    const getSeriesData = () => {
         let seriesData = [];
         const scrobblingDataCopy = deepCopy(scrobblingData);
 
-        for (let i = 0; i < noOfSeries; i++){
-            seriesData.push(
-                {
-                    name: scrobblingDataCopy[i].name,
-                    data: scrobblingDataCopy[i][dataPresentationMode],
-                }
-            )
+        if (smoothStrength > 0){
+            activeItems.map(item => {
+                seriesData.push(
+                    {
+                        name: scrobblingDataCopy[item].name,
+                        data: getSmoothedValues(smoothStrength, item)
+                    }
+                )
+            })
+        } else {
+            activeItems.map(item => {
+                seriesData.push(
+                    {
+                        name: scrobblingDataCopy[item].name,
+                        data: scrobblingDataCopy[item][dataPresentationMode],
+                    }
+                )
+            })
         }
-
         return seriesData
     }
 
@@ -241,13 +264,13 @@ function ChartPage() {
             xAxis: {
                 categories: generateScrobblingPeriods(userInfo.registered['#text']).map(period => (formatDate(period.fromUnix)))
             },
-            series: getSeriesData(10)
+            series: getSeriesData()
         })
     }, [scrobblingData]);
 
     const updateChartSeries = () => {
         setChartOptions({
-            series: getSeriesData(10),
+            series: getSeriesData(),
             chart: {
                 type: chartType
             }
@@ -258,10 +281,67 @@ function ChartPage() {
         scrobblingData &&
 
         updateChartSeries()
-    },[dataPresentationMode, chartType])
+    },[dataPresentationMode, chartType, activeItems, smoothStrength])
 
     const sortArray = (array) => {
         return array.sort((a, b) => b.totalScrobbles - a.totalScrobbles);
+    }
+
+    const clearSeriesData = () => {
+        let activeItemsEmpty = []
+        setActiveItems(activeItemsEmpty)
+    }
+
+    const resetSeriesData = () => {
+        let activeItemsReset = [0,1,2,3,4]
+        setActiveItems(activeItemsReset)
+    }
+
+    const removeFromActiveItems = (index) => {
+        let activeItemsCopy = [...activeItems]
+        activeItemsCopy.splice(index, 1)
+        setActiveItems(activeItemsCopy)
+    }
+
+    const addToActiveItems = (index) => {
+        let activeItemsCopy = [...activeItems]
+        activeItemsCopy.push(index)
+        setActiveItems(activeItemsCopy)
+    }
+
+    const getSmoothedValues = (smoothStrength, index) => {
+        let scrobbleDataCopy = [...scrobblingData];
+        let smoothedData = []
+
+        let series = scrobbleDataCopy[index][dataPresentationMode];
+
+        for (let i = 0; i < series.length; i++){
+            switch (smoothStrength){
+                case 1:
+                    smoothedData.push(
+                        Math.round((series[i-1] + series[i] + series[i+1])/3)
+                    )
+                    break;
+                case 2:
+                    smoothedData.push(
+                        Math.round((series[i-2] + series[i-1] + series[i] + series[i+1] + series[i+2])/5)
+                    )
+                    break;
+                case 3:
+                    smoothedData.push(
+                        Math.round((series[i-3] + series[i-2] + series[i-1] + series[i] + series[i+1] + series[i+2] + series[i+3])/7)
+                    )
+                    break;
+            }
+        }
+        return smoothedData
+    }
+
+    const getSmoothingLabel = () => {
+        if (smoothStrength === 0) return "No smoothing (real data)"
+        if (smoothStrength === 1) return "3-point smoothing"
+        if (smoothStrength === 2) return "5-point smoothing"
+        if (smoothStrength === 3) return "7-point smoothing"
     }
 
     return (
@@ -282,23 +362,39 @@ function ChartPage() {
                                     <Button w={'100%'} onClick={() => setDataPresentationMode('noncumulativeScrobbleData')}>Non-cumulative</Button>
                                     <Button w={'100%'} onClick={() => setDataPresentationMode('periodRankingPositions')}>Ranking</Button>
                                 </HStack>
-                                <Select mb={3} variant={'filled'} maxW={'100%'} onChange={(e) => setChartType(e.target.value)}>
+                                <Select mb={3} variant={'filled'} maxW={'100%'}
+                                        onChange={(e) => setChartType(e.target.value)}>
                                     <option value={"line"}>Line</option>
                                     <option value={"column"}>Column</option>
                                     <option value={"area"}>Area</option>
                                     <option value={"scatter"}>Scatter</option>
+                                    <option value={"spline"}>Smooth line</option>
                                 </Select>
+                                <CustomDivider text={'Visualisation Options'}/>
+                                <Box mt={2} mb={2}>
+                                    <Text>Data smoothing: <span style={{fontWeight: 'bold'}}>{getSmoothingLabel()}</span></Text>
+                                    <Slider defaultValue={0} min={0} max={3} onChange={(val) => setSmoothStrength(val)}>
+                                        <SliderTrack>
+                                            <SliderFilledTrack />
+                                        </SliderTrack>
+                                        <SliderThumb />
+                                    </Slider>
+                                </Box>
                                 <CustomDivider text={'Series Entries'}/>
-                                <Select variant={'filled'} maxW={'100%'}>
+                                <Select variant={'filled'} maxW={'100%'} onChange={(e) => addToActiveItems(e.target.value)}>
                                     {
                                         sortArray(scrobblingData).map((item, index) => (
                                             <option value={index}>{item.name}</option>
                                         ))
                                     }
                                 </Select>
+                                <HStack mt={2} mb={2} justifyContent={'space-between'}>
+                                    <Button onClick={() => clearSeriesData()} size={'sm'} w={'100%'}>Clear All</Button>
+                                    <Button onClick={() => resetSeriesData()} size={'sm'} w={'100%'}>Reset</Button>
+                                </HStack>
                                 <Box display={'flex'} flexWrap={'wrap'} mt={2}>
                                     {
-                                        activeItems.map((item) => (
+                                        activeItems.map((item, index) => (
                                             <Tag
                                                 m={1}
                                                 key={item}
@@ -306,7 +402,7 @@ function ChartPage() {
                                                 variant={'solid'}
                                             >
                                                 <TagLabel pb={1} pt={1}>{scrobblingData[item].name}</TagLabel>
-                                                <TagCloseButton />
+                                                <TagCloseButton onClick={() => removeFromActiveItems(index)}/>
                                             </Tag>
                                         ))
                                     }
