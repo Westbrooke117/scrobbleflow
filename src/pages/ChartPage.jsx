@@ -21,10 +21,11 @@ import {
     Switch,
     Slider,
     SliderTrack,
-    SliderFilledTrack, SliderThumb
+    SliderFilledTrack, SliderThumb, MenuButton, Input, Menu, MenuList, MenuItem, useDisclosure, Flex
 } from "@chakra-ui/react";
 import {useParams} from "react-router-dom";
 import {CustomDivider} from "../components/CustomDivider.jsx";
+import {AutoComplete, AutoCompleteInput, AutoCompleteItem, AutoCompleteList} from "@choc-ui/chakra-autocomplete";
 
 class Artist {
     constructor(name){
@@ -91,10 +92,23 @@ function ChartPage() {
             chart: {
                 type: chartType,
                 backgroundColor: '#1a202c',
-                height: '70%'
+                height: '59%'
             },
             plotOptions: {
                 line: {
+                    marker: {
+                        enabled: false
+                    }
+                },
+                column: {
+                    borderWidth: 0
+                },
+                spline: {
+                    marker: {
+                        enabled: false
+                    }
+                },
+                area: {
                     marker: {
                         enabled: false
                     }
@@ -157,33 +171,6 @@ function ChartPage() {
     const formatDate = (unixTimestamp) => {
         let date = new Date(unixTimestamp * 1000)
 
-        let day = date.getDay()
-        let dayOfWeek;
-
-        switch (day) {
-            case 0:
-                dayOfWeek = "Mon"
-                break;
-            case 1:
-                dayOfWeek = "Tue"
-                break;
-            case 2:
-                dayOfWeek = "Wed"
-                break;
-            case 3:
-                dayOfWeek = "Thu"
-                break;
-            case 4:
-                dayOfWeek = "Fri"
-                break;
-            case 5:
-                dayOfWeek = "Sat"
-                break;
-            case 6:
-                dayOfWeek = "Sun"
-                break;
-        }
-
         let month = date.toLocaleString('default', { month: 'long' });
         let year = date.getFullYear();
 
@@ -195,7 +182,7 @@ function ChartPage() {
         const weekInSeconds = 604800;
 
         let scrobblingPeriods = [];
-
+        
         //Generate "from" and "to" unix timestamps for api requests
         for (let scrobblingPeriod = startingUnix; scrobblingPeriod < endingUnix; scrobblingPeriod += weekInSeconds) {
             let fromUnix = scrobblingPeriod;
@@ -303,8 +290,11 @@ function ChartPage() {
         setActiveItems(activeItemsCopy)
     }
 
-    const addToActiveItems = (index) => {
+    const addToActiveItems = (itemName) => {
         let activeItemsCopy = [...activeItems]
+
+        let index = scrobblingData.findIndex(item => item.name === itemName)
+
         activeItemsCopy.push(index)
         setActiveItems(activeItemsCopy)
     }
@@ -344,6 +334,8 @@ function ChartPage() {
         if (smoothStrength === 3) return "7-point smoothing"
     }
 
+    const { isOpen, onOpen, onClose } = useDisclosure()
+
     return (
         <Container maxW={'100%'} p={0} m={0}>
             <Grid templateColumns={'repeat(6,1fr)'}>
@@ -357,10 +349,10 @@ function ChartPage() {
                             </HStack>
                             <Box mt={3} ml={5} mr={5}>
                                 <CustomDivider text={'Chart Settings'}/>
-                                <HStack mb={2} justifyContent={'space-between'} alignItems={'center'}>
-                                    <Button w={'100%'} onClick={() => setDataPresentationMode('cumulativeScrobbleData')}>Cumulative</Button>
-                                    <Button w={'100%'} onClick={() => setDataPresentationMode('noncumulativeScrobbleData')}>Non-cumulative</Button>
-                                    <Button w={'100%'} onClick={() => setDataPresentationMode('periodRankingPositions')}>Ranking</Button>
+                                <HStack mb={2} justifyContent={'space-evenly'} alignItems={'center'}>
+                                    <Button fontSize={14} className={dataPresentationMode === 'cumulativeScrobbleData' && 'option-button'} w={'100%'} onClick={() => setDataPresentationMode('cumulativeScrobbleData')}>Cumulative</Button>
+                                    <Button fontSize={14} className={dataPresentationMode === 'noncumulativeScrobbleData' && 'option-button'} w={'100%'} onClick={() => setDataPresentationMode('noncumulativeScrobbleData')}>Non-cumulative</Button>
+                                    <Button fontSize={14} className={dataPresentationMode === 'periodRankingPositions' && 'option-button'} w={'100%'} onClick={() => setDataPresentationMode('periodRankingPositions')}>Ranking</Button>
                                 </HStack>
                                 <Select mb={3} variant={'filled'} maxW={'100%'}
                                         onChange={(e) => setChartType(e.target.value)}>
@@ -379,15 +371,25 @@ function ChartPage() {
                                         </SliderTrack>
                                         <SliderThumb />
                                     </Slider>
+                                    <Flex>
+                                        <Text>Show raw data with smoothed</Text>
+                                        <Checkbox ml={2}/>
+                                    </Flex>
                                 </Box>
                                 <CustomDivider text={'Series Entries'}/>
-                                <Select variant={'filled'} maxW={'100%'} onChange={(e) => addToActiveItems(e.target.value)}>
-                                    {
-                                        sortArray(scrobblingData).map((item, index) => (
-                                            <option value={index}>{item.name}</option>
-                                        ))
-                                    }
-                                </Select>
+                                <AutoComplete openOnFocus listAllValuesOnFocus={true} maxSuggestions={50} onChange={(val) => addToActiveItems(val)}>
+                                    <AutoCompleteInput variant={'outline'}/>
+                                    <AutoCompleteList m={0} p={0}>
+                                        {
+                                            sortArray(scrobblingData).map((item, index) => (
+                                                <AutoCompleteItem key={`item${index}`} value={item.name} whiteSpace={'nowrap'} p={1} pl={3} m={0}>
+                                                    <span>{item.name} · </span>
+                                                    <span style={{fontWeight:'bold', marginLeft:'4px'}}>{item.totalScrobbles}</span>
+                                                </AutoCompleteItem>
+                                            ))
+                                        }
+                                    </AutoCompleteList>
+                                </AutoComplete>
                                 <HStack mt={2} mb={2} justifyContent={'space-between'}>
                                     <Button onClick={() => clearSeriesData()} size={'sm'} w={'100%'}>Clear All</Button>
                                     <Button onClick={() => resetSeriesData()} size={'sm'} w={'100%'}>Reset</Button>
