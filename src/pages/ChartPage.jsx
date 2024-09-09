@@ -209,14 +209,15 @@ function ChartPage() {
 
     const generateScrobblingPeriods = (startingUnix) => {
         const endingUnix = Date.now() / 1000;
-        const weekInSeconds = 604800;
+        const periodLengthSeconds = Math.floor((endingUnix - startingUnix)/200); //Max limit of 200 scrobbling periods to prevent API overload
 
         let scrobblingPeriods = [];
         
         //Generate "from" and "to" unix timestamps for api requests
-        for (let scrobblingPeriod = startingUnix; scrobblingPeriod < endingUnix; scrobblingPeriod += weekInSeconds) {
+        for (let scrobblingPeriod = startingUnix; scrobblingPeriod < endingUnix; scrobblingPeriod += periodLengthSeconds) {
+
             let fromUnix = scrobblingPeriod;
-            let toUnix = scrobblingPeriod + weekInSeconds;
+            let toUnix = scrobblingPeriod + periodLengthSeconds;
 
             scrobblingPeriods.push({
                 fromUnix: fromUnix,
