@@ -1,9 +1,7 @@
 import axios from "axios";
 
-const getScrobblingDataForAllPeriods = async (username, scrobblingPeriods) => {
+const getScrobblingDataForAllPeriods = async (username, scrobblingPeriods, category) => {
     let scrobblingData = [];
-
-    const category = 'track'
 
     //Generate array of API requests
     let scrobblingPeriodRequests = [];

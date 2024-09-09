@@ -84,8 +84,6 @@ class Artist {
 }
 
 function ChartPage() {
-    const {username} = useParams()
-
     const [userInfo, setUserInfo] = useState();
     const [scrobblingData, setScrobblingData] = useState();
     const [activeItems, setActiveItems] = useState([0, 1, 2, 3, 4]);
@@ -95,6 +93,13 @@ function ChartPage() {
     const [alignedToFirstScrobble, setAlignedToFirstScrobble] = useState(false)
 
     const chartRef = useRef()
+
+    const [currentInputUsername, setCurrentInputUsername] = useState("")
+
+    const {user} = useParams()
+    const [username, setUsername] = useState(user)
+
+    const [dataSource, setDataSource] = useState("artist")
 
     const [chartOptions, setChartOptions] = useState(
         {
@@ -150,7 +155,7 @@ function ChartPage() {
 
     useEffect(() => {
         getUserInfo(username).then(response => setUserInfo(response))
-    }, []);
+    }, [username]);
 
     useEffect(() => {
         // Wait for userInfo to be populated
@@ -159,11 +164,11 @@ function ChartPage() {
         const startingUnix = userInfo.registered['#text'];
         const scrobblingPeriods = generateScrobblingPeriods(startingUnix);
 
-        getScrobblingDataForAllPeriods(username, scrobblingPeriods)
+        getScrobblingDataForAllPeriods(username, scrobblingPeriods, dataSource)
             .then(response => {
                 setScrobblingData(formatScrobblingData(response))
             })
-    },[userInfo]);
+    },[userInfo, dataSource]);
 
     const formatScrobblingData = (scrobblingData) => {
         let listOfItemNames = [];
@@ -395,14 +400,14 @@ function ChartPage() {
                                 <FormControl>
                                     <FormLabel>Change data source</FormLabel>
                                     <HStack justifyContent={'space-evenly'} alignItems={'center'} mb={2}>
-                                        <Button w={'100%'} variant={'outline'}>Artists</Button>
-                                        <Button w={'100%'} variant={'outline'}>Albums</Button>
-                                        <Button w={'100%'} variant={'outline'}>Tracks</Button>
+                                        <Button w={'100%'} variant={'outline'} onClick={() => setDataSource('artist')}>Artists</Button>
+                                        <Button w={'100%'} variant={'outline'} onClick={() => setDataSource('album')}>Albums</Button>
+                                        <Button w={'100%'} variant={'outline'} onClick={() => setDataSource('track')}>Tracks</Button>
                                     </HStack>
                                     <FormLabel>Change user</FormLabel>
                                     <HStack>
-                                        <Input/>
-                                        <Button pl={5} pr={5}>Submit</Button>
+                                        <Input onChange={(e) => setCurrentInputUsername(e.target.value)}/>
+                                        <Button pl={5} pr={5} onClick={() => setUsername(currentInputUsername)}>Submit</Button>
                                     </HStack>
                                 </FormControl>
                             </AccordionPanel>

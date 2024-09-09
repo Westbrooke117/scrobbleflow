@@ -5,7 +5,7 @@ import {ChartPage} from "./pages/ChartPage.jsx";
 const App = () => {
   return <Routes>
     <Route path="/" element={<UserInputPage/>} />
-    <Route path="/chart/:username" element={<ChartPage/>} />
+    <Route path="/chart/:user" element={<ChartPage/>} />
   </Routes>
 }
 
