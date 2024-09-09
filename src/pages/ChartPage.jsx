@@ -18,10 +18,18 @@ import {
     TagLabel,
     TagCloseButton,
     Checkbox,
-    Switch,
     Slider,
     SliderTrack,
-    SliderFilledTrack, SliderThumb, MenuButton, Input, Menu, MenuList, MenuItem, useDisclosure, Flex
+    SliderFilledTrack,
+    SliderThumb,
+    Flex,
+    Fade,
+    Spinner,
+    Accordion,
+    AccordionItem,
+    AccordionButton,
+    AccordionPanel,
+    AccordionIcon, Input, FormControl, FormLabel, FormHelperText
 } from "@chakra-ui/react";
 import {useParams} from "react-router-dom";
 import {CustomDivider} from "../components/CustomDivider.jsx";
@@ -84,6 +92,7 @@ function ChartPage() {
     const [dataPresentationMode, setDataPresentationMode] = useState('cumulativeScrobbleData');
     const [chartType, setChartType] = useState('line');
     const [smoothStrength, setSmoothStrength] = useState(0)
+    const [alignedToFirstScrobble, setAlignedToFirstScrobble] = useState(false)
 
     const chartRef = useRef()
 
@@ -91,8 +100,7 @@ function ChartPage() {
         {
             chart: {
                 type: chartType,
-                backgroundColor: '#1a202c',
-                height: '59%'
+                backgroundColor: '#1a202c'
             },
             plotOptions: {
                 line: {
@@ -139,6 +147,23 @@ function ChartPage() {
             series: {}
         }
     );
+
+    useEffect(() => {
+        getUserInfo(username).then(response => setUserInfo(response))
+    }, []);
+
+    useEffect(() => {
+        // Wait for userInfo to be populated
+        if (userInfo === undefined) return;
+
+        const startingUnix = userInfo.registered['#text'];
+        const scrobblingPeriods = generateScrobblingPeriods(startingUnix);
+
+        getScrobblingDataForAllPeriods(username, scrobblingPeriods)
+            .then(response => {
+                setScrobblingData(formatScrobblingData(response))
+            })
+    },[userInfo]);
 
     const formatScrobblingData = (scrobblingData) => {
         let listOfItemNames = [];
@@ -197,51 +222,53 @@ function ChartPage() {
         return scrobblingPeriods;
     }
 
-    useEffect(() => {
-        getUserInfo(username).then(response => setUserInfo(response))
-    }, []);
-
-    useEffect(() => {
-        // Wait for userInfo to be populated
-        if (userInfo === undefined) return;
-
-        const startingUnix = userInfo.registered['#text'];
-        const scrobblingPeriods = generateScrobblingPeriods(startingUnix);
-
-        getScrobblingDataForAllPeriods(username, scrobblingPeriods)
-            .then(response => {
-                setScrobblingData(formatScrobblingData(response))
-            })
-    },[userInfo]);
-
     const deepCopy = (obj) => {
         return JSON.parse(JSON.stringify(obj));
     }
 
     const getSeriesData = () => {
-        let seriesData = [];
         const scrobblingDataCopy = deepCopy(scrobblingData);
+
+        if (alignedToFirstScrobble){
+            activeItems.map(item => {
+                scrobblingDataCopy[item][dataPresentationMode] = getAlignedDataset(scrobblingDataCopy[item][dataPresentationMode])
+            })
+        }
 
         if (smoothStrength > 0){
             activeItems.map(item => {
-                seriesData.push(
-                    {
-                        name: scrobblingDataCopy[item].name,
-                        data: getSmoothedValues(smoothStrength, item)
-                    }
-                )
-            })
-        } else {
-            activeItems.map(item => {
-                seriesData.push(
-                    {
-                        name: scrobblingDataCopy[item].name,
-                        data: scrobblingDataCopy[item][dataPresentationMode],
-                    }
-                )
+                scrobblingDataCopy[item][dataPresentationMode] = smoothDataset(scrobblingDataCopy[item][dataPresentationMode])
             })
         }
+
+        //Generate series array
+        let colours = [ "#2caffe", "#544fc5", "#00e272", "#fe6a35", "#6b8abc", "#d568fb", "#2ee0ca", "#fa4b42", "#feb56a", "#91e8e1" ]
+        let seriesData = []
+
+        activeItems.map((item, index) => {
+            seriesData.push(
+                {
+                    name: scrobblingDataCopy[item].name,
+                    data: scrobblingDataCopy[item][dataPresentationMode],
+                    color: colours[index]
+                }
+            )
+        })
+
+        console.log(chartOptions.series.color)
+
+        //Return array
         return seriesData
+    }
+
+    const getAlignedDataset = ([...dataset]) => {
+        let alignedDataset = []
+
+        for (let i = 0; i < dataset.length; i++) {
+            if (dataset[i] !== 0) alignedDataset.push(dataset[i])
+        }
+
+        return alignedDataset
     }
 
     useEffect(() => {
@@ -268,7 +295,7 @@ function ChartPage() {
         scrobblingData &&
 
         updateChartSeries()
-    },[dataPresentationMode, chartType, activeItems, smoothStrength])
+    },[dataPresentationMode, chartType, activeItems, smoothStrength, alignedToFirstScrobble])
 
     const sortArray = (array) => {
         return array.sort((a, b) => b.totalScrobbles - a.totalScrobbles);
@@ -299,27 +326,28 @@ function ChartPage() {
         setActiveItems(activeItemsCopy)
     }
 
-    const getSmoothedValues = (smoothStrength, index) => {
-        let scrobbleDataCopy = [...scrobblingData];
+    const changeSeriesAlignment = () => {
+        alignedToFirstScrobble === true ? setAlignedToFirstScrobble(false) : setAlignedToFirstScrobble(true)
+    }
+
+    const smoothDataset = ([...dataset]) => {
         let smoothedData = []
 
-        let series = scrobbleDataCopy[index][dataPresentationMode];
-
-        for (let i = 0; i < series.length; i++){
+        for (let i = smoothStrength; i < dataset.length - smoothStrength; i++){
             switch (smoothStrength){
                 case 1:
                     smoothedData.push(
-                        Math.round((series[i-1] + series[i] + series[i+1])/3)
+                        Math.round((dataset[i-1] + dataset[i] + dataset[i+1])/3)
                     )
                     break;
                 case 2:
                     smoothedData.push(
-                        Math.round((series[i-2] + series[i-1] + series[i] + series[i+1] + series[i+2])/5)
+                        Math.round((dataset[i-2] + dataset[i-1] + dataset[i] + dataset[i+1] + dataset[i+2])/5)
                     )
                     break;
                 case 3:
                     smoothedData.push(
-                        Math.round((series[i-3] + series[i-2] + series[i-1] + series[i] + series[i+1] + series[i+2] + series[i+3])/7)
+                        Math.round((dataset[i-3] + dataset[i-2] + dataset[i-1] + dataset[i] + dataset[i+1] + dataset[i+2] + dataset[i+3])/7)
                     )
                     break;
             }
@@ -334,66 +362,129 @@ function ChartPage() {
         if (smoothStrength === 3) return "7-point smoothing"
     }
 
-    const { isOpen, onOpen, onClose } = useDisclosure()
+    /*
+    TODO: Options to choose the period (e.g. last year, last 3 months, etc.)
+    TODO: Allow forecasting of data?
+    TODO: Better feedback for loading and error handling
+    TODO: Improve initial page for user and period input
+    TODO: Option to choose between artist/track/album
+     */
 
     return (
         <Container maxW={'100%'} p={0} m={0}>
-            <Grid templateColumns={'repeat(6,1fr)'}>
+            <Grid templateColumns={'repeat(6,1fr)'} h={'100vh'}>
                 <GridItem colSpan={1}>
-                    {
-                        scrobblingData &&
-                        <>
-                            <HStack alignItems={'center'} justifyContent={'center'} backgroundColor={'gray.900'} pt={2} pb={2}>
-                                <Avatar src={userInfo.image[0]['#text']} size={'sm'}/>
-                                <Text>{userInfo.name}'s last.fm Data</Text>
-                            </HStack>
-                            <Box mt={3} ml={5} mr={5}>
-                                <CustomDivider text={'Chart Settings'}/>
-                                <HStack mb={2} justifyContent={'space-evenly'} alignItems={'center'}>
-                                    <Button fontSize={14} className={dataPresentationMode === 'cumulativeScrobbleData' && 'option-button'} w={'100%'} onClick={() => setDataPresentationMode('cumulativeScrobbleData')}>Cumulative</Button>
-                                    <Button fontSize={14} className={dataPresentationMode === 'noncumulativeScrobbleData' && 'option-button'} w={'100%'} onClick={() => setDataPresentationMode('noncumulativeScrobbleData')}>Non-cumulative</Button>
-                                    <Button fontSize={14} className={dataPresentationMode === 'periodRankingPositions' && 'option-button'} w={'100%'} onClick={() => setDataPresentationMode('periodRankingPositions')}>Ranking</Button>
-                                </HStack>
-                                <Select mb={3} variant={'filled'} maxW={'100%'}
-                                        onChange={(e) => setChartType(e.target.value)}>
-                                    <option value={"line"}>Line</option>
-                                    <option value={"column"}>Column</option>
-                                    <option value={"area"}>Area</option>
-                                    <option value={"scatter"}>Scatter</option>
-                                    <option value={"spline"}>Smooth line</option>
-                                </Select>
-                                <CustomDivider text={'Visualisation Options'}/>
-                                <Box mt={2} mb={2}>
-                                    <Text>Data smoothing: <span style={{fontWeight: 'bold'}}>{getSmoothingLabel()}</span></Text>
-                                    <Slider defaultValue={0} min={0} max={3} onChange={(val) => setSmoothStrength(val)}>
-                                        <SliderTrack>
-                                            <SliderFilledTrack />
-                                        </SliderTrack>
-                                        <SliderThumb />
-                                    </Slider>
-                                    <Flex>
-                                        <Text>Show raw data with smoothed</Text>
-                                        <Checkbox ml={2}/>
+                    <Accordion allowToggle={true}>
+                        <AccordionItem bg={'gray.900'}>
+                            <AccordionButton display={'flex'} alignItems={'center'} justifyContent={'center'}>
+                                {
+                                    userInfo !== undefined ?
+                                        <>
+                                            <Avatar src={userInfo.image[0]['#text']} size={'sm'}/>
+                                            <Text ml={3}>{userInfo.name}'s last.fm Data</Text>
+                                        </>
+                                        :
+                                        <>
+                                            <Avatar size={'sm'}/>
+                                            <Text ml={3}>user's last.fm Data</Text>
+                                        </>
+                                }
+                                <AccordionIcon ml={'auto'}/>
+                            </AccordionButton>
+                            <AccordionPanel pb={4}>
+                                <FormControl>
+                                    <FormLabel>Change data source</FormLabel>
+                                    <HStack justifyContent={'space-evenly'} alignItems={'center'} mb={2}>
+                                        <Button w={'100%'} variant={'outline'}>Artists</Button>
+                                        <Button w={'100%'} variant={'outline'}>Albums</Button>
+                                        <Button w={'100%'} variant={'outline'}>Tracks</Button>
+                                    </HStack>
+                                    <FormLabel>Change user</FormLabel>
+                                    <HStack>
+                                        <Input/>
+                                        <Button pl={5} pr={5}>Submit</Button>
+                                    </HStack>
+                                </FormControl>
+                            </AccordionPanel>
+                        </AccordionItem>
+                    </Accordion>
+
+                    <Box mt={3} ml={5} mr={5}>
+                        <CustomDivider text={'Chart Settings'}/>
+                        <HStack mb={2} justifyContent={'space-evenly'} alignItems={'center'}>
+                            <Button fontSize={14} className={dataPresentationMode === 'cumulativeScrobbleData' && 'option-button'} w={'100%'} onClick={() => setDataPresentationMode('cumulativeScrobbleData')}>Cumulative</Button>
+                            <Button fontSize={14} className={dataPresentationMode === 'noncumulativeScrobbleData' && 'option-button'} w={'100%'} onClick={() => setDataPresentationMode('noncumulativeScrobbleData')}>Non-cumulative</Button>
+                            <Button fontSize={14} className={dataPresentationMode === 'periodRankingPositions' && 'option-button'} w={'100%'} onClick={() => setDataPresentationMode('periodRankingPositions')}>Ranking</Button>
+                        </HStack>
+                        <Select mb={3} variant={'filled'} maxW={'100%'}
+                                onChange={(e) => setChartType(e.target.value)}>
+                            <option value={"line"}>Line</option>
+                            <option value={"column"}>Column</option>
+                            <option value={"area"}>Area</option>
+                            <option value={"scatter"}>Scatter</option>
+                            <option value={"spline"}>Smooth line</option>
+                        </Select>
+                        <CustomDivider text={'Visualisation Options'}/>
+                        <Box mb={2}>
+                            <Box bg={'gray.900'} pl={5} pr={5} pt={2} pb={2} borderRadius={5}>
+                                <Text fontSize={20} mb={1}>Data smoothing</Text>
+                                <hr/>
+                                <Text mt={1}>{getSmoothingLabel()}</Text>
+                                <Slider defaultValue={0} min={0} max={3} onChange={(val) => setSmoothStrength(val)}>
+                                    <SliderTrack>
+                                        <SliderFilledTrack />
+                                    </SliderTrack>
+                                    <SliderThumb />
+                                </Slider>
+                            </Box>
+                            <Box mb={2} mt={2}>
+                                <Box bg={'gray.900'} pl={5} pr={5} pt={2} pb={2} borderRadius={5}>
+                                    <Text fontSize={20} mb={1}>Miscellaneous</Text>
+                                    <hr/>
+                                    <Flex mt={1}>
+                                        <Text>Align data to first scrobble</Text>
+                                        <Checkbox ml={2} onChange={() => changeSeriesAlignment()}/>
                                     </Flex>
                                 </Box>
-                                <CustomDivider text={'Series Entries'}/>
-                                <AutoComplete openOnFocus listAllValuesOnFocus={true} maxSuggestions={50} onChange={(val) => addToActiveItems(val)}>
-                                    <AutoCompleteInput variant={'outline'}/>
-                                    <AutoCompleteList m={0} p={0}>
-                                        {
-                                            sortArray(scrobblingData).map((item, index) => (
-                                                <AutoCompleteItem key={`item${index}`} value={item.name} whiteSpace={'nowrap'} p={1} pl={3} m={0}>
+                            </Box>
+                        </Box>
+                        <CustomDivider text={'Series Entries'}/>
+                        <AutoComplete openOnFocus listAllValuesOnFocus={true} maxSuggestions={50} onChange={(val) => addToActiveItems(val)}>
+                            <AutoCompleteInput variant={'outline'}/>
+                            {
+                                scrobblingData &&
+                                <AutoCompleteList m={0} p={0}>
+                                    {
+                                        sortArray(scrobblingData).map((item, index) => {
+                                            // Check if the current index is in the activeItems array
+                                            const isDisabled = activeItems.includes(index);
+
+                                            return (
+                                                <AutoCompleteItem
+                                                    key={`item${index}`}
+                                                    value={item.name}
+                                                    whiteSpace={'nowrap'}
+                                                    p={1}
+                                                    pl={3}
+                                                    m={0}
+                                                    disabled={isDisabled}
+                                                >
                                                     <span>{item.name} · </span>
                                                     <span style={{fontWeight:'bold', marginLeft:'4px'}}>{item.totalScrobbles}</span>
                                                 </AutoCompleteItem>
-                                            ))
-                                        }
-                                    </AutoCompleteList>
-                                </AutoComplete>
-                                <HStack mt={2} mb={2} justifyContent={'space-between'}>
-                                    <Button onClick={() => clearSeriesData()} size={'sm'} w={'100%'}>Clear All</Button>
-                                    <Button onClick={() => resetSeriesData()} size={'sm'} w={'100%'}>Reset</Button>
-                                </HStack>
+                                            );
+                                        })
+                                    }
+                                </AutoCompleteList>
+                            }
+                        </AutoComplete>
+                        <HStack mt={2} mb={2} justifyContent={'space-between'}>
+                            <Button onClick={() => clearSeriesData()} size={'sm'} w={'100%'}>Clear All</Button>
+                            <Button onClick={() => resetSeriesData()} size={'sm'} w={'100%'}>Reset</Button>
+                        </HStack>
+                        {
+                            scrobblingData &&
+                            <Fade in={true}>
                                 <Box display={'flex'} flexWrap={'wrap'} mt={2}>
                                     {
                                         activeItems.map((item, index) => (
@@ -409,12 +500,22 @@ function ChartPage() {
                                         ))
                                     }
                                 </Box>
-                            </Box>
-                        </>
-                    }
+                            </Fade>
+                        }
+                    </Box>
                 </GridItem>
                 <GridItem colSpan={5} mt={5}>
-                    <HighchartsReact ref={chartRef} highcharts={Highcharts} options={chartOptions}/>
+                    {
+                        scrobblingData !== undefined ?
+                            <Fade in={true}>
+                                <HighchartsReact ref={chartRef} highcharts={Highcharts} options={chartOptions} containerProps={{ style: { height: '97vh' } }}/>
+                            </Fade>
+                            :
+                            <HStack w={'100%'} h={'100vh'} justifyContent={'center'} alignItems={'center'}>
+                                <Text>loading chart</Text>
+                                <Spinner/>
+                            </HStack>
+                    }
                 </GridItem>
             </Grid>
         </Container>

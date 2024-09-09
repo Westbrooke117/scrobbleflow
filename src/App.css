@@ -4,6 +4,5 @@ body {
 }
 
 .option-button {
-    border: 2px solid #63b3ed;
-    box-sizing: border-box;
+    box-shadow: 0 0 5px #63b3ed inset;
 }
