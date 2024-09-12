@@ -29,11 +29,12 @@ import {
     AccordionItem,
     AccordionButton,
     AccordionPanel,
-    AccordionIcon, Input, FormControl, FormLabel, FormHelperText
+    AccordionIcon, Input, FormControl, FormLabel
 } from "@chakra-ui/react";
 import {useParams} from "react-router-dom";
 import {CustomDivider} from "../components/CustomDivider.jsx";
 import {AutoComplete, AutoCompleteInput, AutoCompleteItem, AutoCompleteList} from "@choc-ui/chakra-autocomplete";
+import {DataSourceButton} from "../components/DataSourceButton.jsx";
 
 class Artist {
     constructor(name){
@@ -91,6 +92,7 @@ function ChartPage() {
     const [chartType, setChartType] = useState('line');
     const [smoothStrength, setSmoothStrength] = useState(0)
     const [alignedToFirstScrobble, setAlignedToFirstScrobble] = useState(false)
+    let colours = [ "#2caffe", "#544fc5", "#00e272", "#fe6a35", "#6b8abc", "#d568fb", "#2ee0ca", "#fa4b42", "#feb56a", "#91e8e1" ]
 
     const chartRef = useRef()
 
@@ -99,13 +101,15 @@ function ChartPage() {
     const {user} = useParams()
     const [username, setUsername] = useState(user)
 
+    const [hasLoaded, setHasLoaded] = useState(false)
+
     const [dataSource, setDataSource] = useState("artist")
 
     const [chartOptions, setChartOptions] = useState(
         {
             chart: {
                 type: chartType,
-                backgroundColor: '#1a202c'
+                backgroundColor: '#1a202c',
             },
             plotOptions: {
                 line: {
@@ -207,6 +211,10 @@ function ChartPage() {
         return `${month} ${year}`
     }
 
+    useEffect(() => {
+        setHasLoaded(false)
+    }, [dataSource]);
+
     const generateScrobblingPeriods = (startingUnix) => {
         const endingUnix = Date.now() / 1000;
         const periodLengthSeconds = Math.floor((endingUnix - startingUnix)/200); //Max limit of 200 scrobbling periods to prevent API overload
@@ -248,7 +256,6 @@ function ChartPage() {
         }
 
         //Generate series array
-        let colours = [ "#2caffe", "#544fc5", "#00e272", "#fe6a35", "#6b8abc", "#d568fb", "#2ee0ca", "#fa4b42", "#feb56a", "#91e8e1" ]
         let seriesData = []
 
         activeItems.map((item, index) => {
@@ -261,7 +268,7 @@ function ChartPage() {
             )
         })
 
-        console.log(chartOptions.series.color)
+        setHasLoaded(true)
 
         //Return array
         return seriesData
@@ -286,6 +293,7 @@ function ChartPage() {
             },
             series: getSeriesData()
         })
+
     }, [scrobblingData]);
 
     const updateChartSeries = () => {
@@ -299,7 +307,6 @@ function ChartPage() {
 
     useEffect(() => {
         scrobblingData &&
-
         updateChartSeries()
     },[dataPresentationMode, chartType, activeItems, smoothStrength, alignedToFirstScrobble])
 
@@ -401,9 +408,9 @@ function ChartPage() {
                                 <FormControl>
                                     <FormLabel>Change data source</FormLabel>
                                     <HStack justifyContent={'space-evenly'} alignItems={'center'} mb={2}>
-                                        <Button w={'100%'} variant={'outline'} onClick={() => setDataSource('artist')}>Artists</Button>
-                                        <Button w={'100%'} variant={'outline'} onClick={() => setDataSource('album')}>Albums</Button>
-                                        <Button w={'100%'} variant={'outline'} onClick={() => setDataSource('track')}>Tracks</Button>
+                                        <DataSourceButton activeDataSource={dataSource} setDataSource={setDataSource} dataSourceName={'artist'} buttonText={'Artists'} hasLoaded={hasLoaded}/>
+                                        <DataSourceButton activeDataSource={dataSource} setDataSource={setDataSource} dataSourceName={'album'} buttonText={'Albums'} hasLoaded={hasLoaded}/>
+                                        <DataSourceButton activeDataSource={dataSource} setDataSource={setDataSource} dataSourceName={'track'} buttonText={'Tracks'} hasLoaded={hasLoaded}/>
                                     </HStack>
                                     <FormLabel>Change user</FormLabel>
                                     <HStack>
@@ -500,6 +507,7 @@ function ChartPage() {
                                                 borderRadius={'full'}
                                                 variant={'solid'}
                                             >
+                                                <Box borderRadius={'full'} bg={colours[index % colours.length]} w={4} h={4} ml={-1} mr={1}/>
                                                 <TagLabel pb={1} pt={1}>{scrobblingData[item].name}</TagLabel>
                                                 <TagCloseButton onClick={() => removeFromActiveItems(index)}/>
                                             </Tag>
@@ -518,7 +526,7 @@ function ChartPage() {
                             </Fade>
                             :
                             <HStack w={'100%'} h={'100vh'} justifyContent={'center'} alignItems={'center'}>
-                                <Text>loading chart</Text>
+                                <Text>loading {user}'s {dataSource} chart</Text>
                                 <Spinner/>
                             </HStack>
                     }
