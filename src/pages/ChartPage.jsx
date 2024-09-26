@@ -2,8 +2,8 @@ import '../App.css'
 import {useEffect, useRef, useState} from "react";
 import getUserInfo from "../getUserInfo.js";
 import {getScrobblingDataForAllPeriods} from "../getScrobblingDataForAllPeriods.js";
+import Highcharts, {setOptions} from 'highcharts/highstock'
 import HighchartsReact from "highcharts-react-official";
-import Highcharts from 'highcharts'
 import {
     HStack,
     Text,
@@ -137,6 +137,30 @@ function ChartPage() {
             title: {
                 text: ''
             },
+            tooltip: {
+                shared: true,
+                split: false,
+                followPointer: true,
+                backgroundColor: '#171923',
+                style: {
+                    color: 'white',
+                    fontWeight: 'normal'
+                },
+                animation: 0,
+                useHTML: true,
+                formatter() {
+                    const chart = this;
+
+                    return `<span style="font-size: 18px">${(new Date(chart.x)).toDateString()}</span><hr style="margin-top: 5px; margin-bottom: 5px;"/>${chart.points
+                        .sort((pointA, pointB) => pointB.y - pointA.y)
+                        .map((point) => {
+                            return `<div style="text-align: center">
+                                        <span style="color: ${point.color}; font-size: 16px"> ${truncateText(point.series.name)}: ${point.y}</span>
+                                    </div>`;
+                        })
+                        .join("\n")}`;
+                },
+            },
             xAxis: {
                 labels: {
                     style: {
@@ -168,11 +192,26 @@ function ChartPage() {
         const startingUnix = userInfo.registered['#text'];
         const scrobblingPeriods = generateScrobblingPeriods(startingUnix);
 
+        setChartOptions({
+            ...chartOptions,
+            plotOptions: {
+                series: {
+                    pointStart: userInfo.registered['#text'] * 1000,
+                    pointInterval: (Date.now() - userInfo.registered['#text'] * 1000) / 200,
+                }
+            },
+        });
+
         getScrobblingDataForAllPeriods(username, scrobblingPeriods, dataSource)
             .then(response => {
                 setScrobblingData(formatScrobblingData(response))
             })
     },[userInfo, dataSource]);
+
+    const truncateText = (text) => {
+        const textCutoff = 17
+        return text.length > textCutoff ? text.substring(0, textCutoff) + "..." : text
+    }
 
     const formatScrobblingData = (scrobblingData) => {
         let listOfItemNames = [];
@@ -288,9 +327,9 @@ function ChartPage() {
         if (scrobblingData === undefined) return;
 
         setChartOptions({
-            xAxis: {
-                categories: generateScrobblingPeriods(userInfo.registered['#text']).map(period => (formatDate(period.fromUnix)))
-            },
+            // xAxis: {
+            //     categories: generateScrobblingPeriods(userInfo.registered['#text']).map(period => (formatDate(period.fromUnix)))
+            // },
             series: getSeriesData()
         })
 
@@ -374,6 +413,7 @@ function ChartPage() {
         if (smoothStrength === 2) return "5-point smoothing"
         if (smoothStrength === 3) return "7-point smoothing"
     }
+
 
     /*
     TODO: Options to choose the period (e.g. last year, last 3 months, etc.)
@@ -522,7 +562,13 @@ function ChartPage() {
                     {
                         scrobblingData !== undefined ?
                             <Fade in={true}>
-                                <HighchartsReact ref={chartRef} highcharts={Highcharts} options={chartOptions} containerProps={{ style: { height: '97vh' } }}/>
+                                <HighchartsReact 
+                                    ref={chartRef} 
+                                    highcharts={Highcharts} 
+                                    constructorType={'stockChart'}
+                                    options={chartOptions}
+                                    containerProps={{ style: { height: '97vh' } }}
+                                />
                             </Fade>
                             :
                             <HStack w={'100%'} h={'100vh'} justifyContent={'center'} alignItems={'center'}>
