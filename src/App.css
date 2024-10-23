@@ -6,3 +6,7 @@ body {
 .option-button {
     box-shadow: 0 0 5px #63b3ed inset;
 }
+
+a:hover {
+    text-decoration: underline;
+}

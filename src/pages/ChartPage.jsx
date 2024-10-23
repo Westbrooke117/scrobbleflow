@@ -1,8 +1,7 @@
 import '../App.css'
-import {useEffect, useRef, useState} from "react";
-import getUserInfo from "../getUserInfo.js";
-import {getScrobblingDataForAllPeriods} from "../getScrobblingDataForAllPeriods.js";
-import Highcharts, {setOptions} from 'highcharts/highstock'
+import {useEffect, useState} from "react";
+import {getScrobblingDataForAllPeriods, getUserInfo} from "../api/api.js";
+import Highcharts from 'highcharts/highstock'
 import HighchartsReact from "highcharts-react-official";
 import {
     HStack,
@@ -12,7 +11,6 @@ import {
     Container,
     Grid,
     GridItem,
-    Avatar,
     Button,
     Tag,
     TagLabel,
@@ -25,25 +23,30 @@ import {
     Flex,
     Fade,
     Spinner,
-    Accordion,
-    AccordionItem,
-    AccordionButton,
-    AccordionPanel,
-    AccordionIcon, Input, FormControl, FormLabel
 } from "@chakra-ui/react";
 import {useParams} from "react-router-dom";
 import {CustomDivider} from "../components/CustomDivider.jsx";
 import {AutoComplete, AutoCompleteInput, AutoCompleteItem, AutoCompleteList} from "@choc-ui/chakra-autocomplete";
-import {DataSourceButton} from "../components/DataSourceButton.jsx";
+import {deepCopy, truncateText} from "../utils/helperFunctions.js";
+import {HeaderBar} from "../components/HeaderBar.jsx";
+import {UserInfoAccordion} from "../components/UserInfoAccordion.jsx";
+import {
+    calculateAlignedDataset,
+    getSmoothStrengthLabel,
+    smoothDataset,
+    sortArrayByTotalScrobbles
+} from "../utils/chartUtils.js";
 
-class Artist {
-    constructor(name){
+class ScrobbleItem {
+    constructor(name, artist=null){
         this.name = name;
+        this.artist = artist;
         this.totalScrobbles = 0;
         this.cumulativeScrobbleData = [];
         this.noncumulativeScrobbleData = [];
         this.periodRankingPositions = [];
     }
+
     calculateTotalScrobbles(scrobblingData){
         let runningTotal = 0;
 
@@ -56,6 +59,7 @@ class Artist {
         })
         this.totalScrobbles = runningTotal;
     }
+
     calculateLongitudinalData(scrobblingData){
         let cumulativeScrobbleData= [];
         let runningTotal = 0;
@@ -85,6 +89,10 @@ class Artist {
 }
 
 function ChartPage() {
+    // URL parameters
+    const {user} = useParams()
+
+    // State initialisation
     const [userInfo, setUserInfo] = useState();
     const [scrobblingData, setScrobblingData] = useState();
     const [activeItems, setActiveItems] = useState([0, 1, 2, 3, 4]);
@@ -92,24 +100,22 @@ function ChartPage() {
     const [chartType, setChartType] = useState('line');
     const [smoothStrength, setSmoothStrength] = useState(0)
     const [alignedToFirstScrobble, setAlignedToFirstScrobble] = useState(false)
-    let colours = [ "#2caffe", "#544fc5", "#00e272", "#fe6a35", "#6b8abc", "#d568fb", "#2ee0ca", "#fa4b42", "#feb56a", "#91e8e1" ]
-
-    const chartRef = useRef()
-
     const [currentInputUsername, setCurrentInputUsername] = useState("")
-
-    const {user} = useParams()
     const [username, setUsername] = useState(user)
-
     const [hasLoaded, setHasLoaded] = useState(false)
-
     const [dataSource, setDataSource] = useState("artist")
-
     const [chartOptions, setChartOptions] = useState(
         {
             chart: {
                 type: chartType,
                 backgroundColor: '#1a202c',
+            },
+            navigator: {
+                enabled: true,
+                outlineColor: '#3f444e'
+            },
+            scrollbar: {
+                enabled: false,
             },
             plotOptions: {
                 line: {
@@ -131,8 +137,44 @@ function ChartPage() {
                     }
                 }
             },
+            rangeSelector: {
+                buttonTheme: {
+                    fill: '#2c323d',
+                    r: 5,
+                    width: 30,
+                    style: {
+                        color: 'white',
+                        fontWeight: 'bold',
+                    },
+                    states: {
+                        hover: {
+                            fill: '#3f444e',
+                            style: {
+                                color: 'white'
+                            }
+                        },
+                        select: {
+                            fill: '#90cdf4',
+                            style: {
+                                color: '#171923'
+                            }
+                        }
+                    }
+                },
+                labelStyle: {
+                    color: '#b1b1b1',
+                    fontWeight: 'bold'
+                },
+                inputStyle: {
+                    color: '#b1b1b1'
+                }
+            },
             legend: {
-                itemStyle: {'color':'#eeefef'}
+                enabled: true,
+                itemStyle: {'color':'#eeefef'},
+                itemHoverStyle: {
+                    color: '#b1b1b1'
+                }
             },
             title: {
                 text: ''
@@ -155,7 +197,7 @@ function ChartPage() {
                         .sort((pointA, pointB) => pointB.y - pointA.y)
                         .map((point) => {
                             return `<div style="text-align: center">
-                                        <span style="color: ${point.color}; font-size: 16px"> ${truncateText(point.series.name)}: ${point.y}</span>
+                                        <span style="color: ${point.color}; font-size: 16px"> ${truncateText(point.series.name)}: <strong>${point.y.toLocaleString()}</strong></span>
                                     </div>`;
                         })
                         .join("\n")}`;
@@ -169,6 +211,7 @@ function ChartPage() {
                 }
             },
             yAxis: {
+                opposite: false,
                 gridLineColor: '#2c323d',
                 labels: {
                     style: {
@@ -181,6 +224,7 @@ function ChartPage() {
         }
     );
 
+    // Get user info on initial page load / when user changes
     useEffect(() => {
         getUserInfo(username).then(response => setUserInfo(response))
     }, [username]);
@@ -189,79 +233,79 @@ function ChartPage() {
         // Wait for userInfo to be populated
         if (userInfo === undefined) return;
 
-        const startingUnix = userInfo.registered['#text'];
-        const scrobblingPeriods = generateScrobblingPeriods(startingUnix);
+        // Used to show loading text on chart area
+        setHasLoaded(false)
 
+        const startingUnixSeconds = userInfo.registered['#text'];
+
+        const numberOfScrobblePeriods = 10;
+        const scrobblingPeriods = generateScrobblingPeriods(startingUnixSeconds, numberOfScrobblePeriods);
+
+        // Populating chart with time periods
         setChartOptions({
             ...chartOptions,
             plotOptions: {
                 series: {
                     pointStart: userInfo.registered['#text'] * 1000,
-                    pointInterval: (Date.now() - userInfo.registered['#text'] * 1000) / 200,
+                    pointInterval: (Date.now() - userInfo.registered['#text'] * 1000) / numberOfScrobblePeriods,
                 }
             },
         });
 
+        // Get scrobbling data from last.fm API for each period
         getScrobblingDataForAllPeriods(username, scrobblingPeriods, dataSource)
             .then(response => {
-                setScrobblingData(formatScrobblingData(response))
+                setScrobblingData(createScrobblingDataObjects(response))
             })
     },[userInfo, dataSource]);
 
-    const truncateText = (text) => {
-        const textCutoff = 17
-        return text.length > textCutoff ? text.substring(0, textCutoff) + "..." : text
-    }
+    const createScrobblingDataObjects = (scrobblingData) => {
+        let listOfItemNames = new Set();
+        // Note "item" in this context refers to either an artist, album, or track object from the last.fm API
 
-    const formatScrobblingData = (scrobblingData) => {
-        let listOfItemNames = [];
+        // Get unique list of item names
+        scrobblingData.forEach(period => {
+            period.forEach(item => {
+                listOfItemNames.add(item.name);  // Set automatically handles uniqueness
+            });
+        });
 
-        // Note "item" in this context refers to either an artist, album, or track
-
-        scrobblingData.map(period => {
-            period.map(item => {
-                if (listOfItemNames.includes(item.name)){
-                    // Ignore
-                } else {
-                    listOfItemNames.push(item.name)
+        const getArtist = (scrobblingData, itemName) => {
+            for (let period of scrobblingData) {
+                for (let item of period) {
+                    if (item.name === itemName) {
+                        return item.artist['#text']; // Return the artist when found
+                    }
                 }
-            })
-        })
+            }
+            return null;  // In case no match is found
+        };
 
         let formattedScrobblingData = [];
 
-        listOfItemNames.map(itemName => {
-            let item = new Artist(itemName)
-            item.calculateTotalScrobbles(scrobblingData)
-            item.calculateLongitudinalData(scrobblingData)
+        listOfItemNames.forEach(itemName => {
+            let item = new ScrobbleItem(itemName);
+
+            if (dataSource !== 'artist') {
+                // Used for additional context in series entry search box
+                item.artist = getArtist(scrobblingData, itemName);
+            }
+            item.calculateTotalScrobbles(scrobblingData);
+            item.calculateLongitudinalData(scrobblingData);
 
             formattedScrobblingData.push(item);
-        })
-
+        });
         return formattedScrobblingData;
-    }
+    };
 
-    const formatDate = (unixTimestamp) => {
-        let date = new Date(unixTimestamp * 1000)
-
-        let month = date.toLocaleString('default', { month: 'long' });
-        let year = date.getFullYear();
-
-        return `${month} ${year}`
-    }
-
-    useEffect(() => {
-        setHasLoaded(false)
-    }, [dataSource]);
-
-    const generateScrobblingPeriods = (startingUnix) => {
-        const endingUnix = Date.now() / 1000;
-        const periodLengthSeconds = Math.floor((endingUnix - startingUnix)/200); //Max limit of 200 scrobbling periods to prevent API overload
+    const generateScrobblingPeriods = (startingUnix, numberOfScrobblePeriods) => {
+        const currentUnixSeconds = Date.now() / 1000;
+        const periodLengthSeconds = Math.floor((currentUnixSeconds - startingUnix)/numberOfScrobblePeriods); //Max limit of scrobbling periods to prevent API overload
 
         let scrobblingPeriods = [];
         
-        //Generate "from" and "to" unix timestamps for api requests
-        for (let scrobblingPeriod = startingUnix; scrobblingPeriod < endingUnix; scrobblingPeriod += periodLengthSeconds) {
+        // Generate "from" and "to" unix timestamps for api requests
+        for (let scrobblingPeriod = startingUnix; scrobblingPeriod < currentUnixSeconds; scrobblingPeriod += periodLengthSeconds) {
 
             let fromUnix = scrobblingPeriod;
             let toUnix = scrobblingPeriod + periodLengthSeconds;
@@ -275,26 +319,27 @@ function ChartPage() {
         return scrobblingPeriods;
     }
 
-    const deepCopy = (obj) => {
-        return JSON.parse(JSON.stringify(obj));
-    }
+    let chartSeriesColours = [ "#2caffe", "#544fc5", "#00e272", "#fe6a35", "#6b8abc", "#d568fb", "#2ee0ca", "#fa4b42", "#feb56a", "#91e8e1" ]
 
-    const getSeriesData = () => {
+    const generateSeriesData = () => {
+        // Create copy because otherwise highcharts mutates state
         const scrobblingDataCopy = deepCopy(scrobblingData);
 
+        // Modify dataset to align to first scrobble
         if (alignedToFirstScrobble){
             activeItems.map(item => {
-                scrobblingDataCopy[item][dataPresentationMode] = getAlignedDataset(scrobblingDataCopy[item][dataPresentationMode])
+                scrobblingDataCopy[item][dataPresentationMode] = calculateAlignedDataset(scrobblingDataCopy[item][dataPresentationMode])
             })
         }
 
+        // Modify dataset to smooth values
         if (smoothStrength > 0){
             activeItems.map(item => {
-                scrobblingDataCopy[item][dataPresentationMode] = smoothDataset(scrobblingDataCopy[item][dataPresentationMode])
+                scrobblingDataCopy[item][dataPresentationMode] = smoothDataset(scrobblingDataCopy[item][dataPresentationMode], smoothStrength)
             })
         }
 
-        //Generate series array
+        // Create series array
         let seriesData = []
 
         activeItems.map((item, index) => {
@@ -302,56 +347,38 @@ function ChartPage() {
                 {
                     name: scrobblingDataCopy[item].name,
                     data: scrobblingDataCopy[item][dataPresentationMode],
-                    color: colours[index]
+                    color: chartSeriesColours[index]
                 }
             )
         })
 
         setHasLoaded(true)
 
-        //Return array
         return seriesData
     }
 
-    const getAlignedDataset = ([...dataset]) => {
-        let alignedDataset = []
-
-        for (let i = 0; i < dataset.length; i++) {
-            if (dataset[i] !== 0) alignedDataset.push(dataset[i])
-        }
-
-        return alignedDataset
-    }
-
+    // Reloads chart if scrobbling data source changes (artist, album, track)
     useEffect(() => {
         if (scrobblingData === undefined) return;
 
         setChartOptions({
-            // xAxis: {
-            //     categories: generateScrobblingPeriods(userInfo.registered['#text']).map(period => (formatDate(period.fromUnix)))
-            // },
-            series: getSeriesData()
+            series: generateSeriesData()
         })
 
     }, [scrobblingData]);
 
-    const updateChartSeries = () => {
+    // Used to regenerate series data when chart settings changes
+    useEffect(() => {
+        scrobblingData &&
         setChartOptions({
-            series: getSeriesData(),
+            series: generateSeriesData(),
             chart: {
                 type: chartType
             }
         })
-    }
-
-    useEffect(() => {
-        scrobblingData &&
-        updateChartSeries()
     },[dataPresentationMode, chartType, activeItems, smoothStrength, alignedToFirstScrobble])
 
-    const sortArray = (array) => {
-        return array.sort((a, b) => b.totalScrobbles - a.totalScrobbles);
-    }
+
 
     const clearSeriesData = () => {
         let activeItemsEmpty = []
@@ -378,90 +405,33 @@ function ChartPage() {
         setActiveItems(activeItemsCopy)
     }
 
-    const changeSeriesAlignment = () => {
+    const toggleAlignedToFirstScrobble = () => {
         alignedToFirstScrobble === true ? setAlignedToFirstScrobble(false) : setAlignedToFirstScrobble(true)
     }
-
-    const smoothDataset = ([...dataset]) => {
-        let smoothedData = []
-
-        for (let i = smoothStrength; i < dataset.length - smoothStrength; i++){
-            switch (smoothStrength){
-                case 1:
-                    smoothedData.push(
-                        Math.round((dataset[i-1] + dataset[i] + dataset[i+1])/3)
-                    )
-                    break;
-                case 2:
-                    smoothedData.push(
-                        Math.round((dataset[i-2] + dataset[i-1] + dataset[i] + dataset[i+1] + dataset[i+2])/5)
-                    )
-                    break;
-                case 3:
-                    smoothedData.push(
-                        Math.round((dataset[i-3] + dataset[i-2] + dataset[i-1] + dataset[i] + dataset[i+1] + dataset[i+2] + dataset[i+3])/7)
-                    )
-                    break;
-            }
-        }
-        return smoothedData
-    }
-
-    const getSmoothingLabel = () => {
-        if (smoothStrength === 0) return "No smoothing (real data)"
-        if (smoothStrength === 1) return "3-point smoothing"
-        if (smoothStrength === 2) return "5-point smoothing"
-        if (smoothStrength === 3) return "7-point smoothing"
-    }
-
 
     /*
     TODO: Options to choose the period (e.g. last year, last 3 months, etc.)
     TODO: Allow forecasting of data?
     TODO: Better feedback for loading and error handling
     TODO: Improve initial page for user and period input
-    TODO: Option to choose between artist/track/album
      */
 
     return (
         <Container maxW={'100%'} p={0} m={0}>
             <Grid templateColumns={'repeat(6,1fr)'} h={'100vh'}>
                 <GridItem colSpan={1}>
-                    <Accordion allowToggle={true}>
-                        <AccordionItem bg={'gray.900'}>
-                            <AccordionButton display={'flex'} alignItems={'center'} justifyContent={'center'}>
-                                {
-                                    userInfo !== undefined ?
-                                        <>
-                                            <Avatar src={userInfo.image[0]['#text']} size={'sm'}/>
-                                            <Text ml={3}>{userInfo.name}'s last.fm Data</Text>
-                                        </>
-                                        :
-                                        <>
-                                            <Avatar size={'sm'}/>
-                                            <Text ml={3}>user's last.fm Data</Text>
-                                        </>
-                                }
-                                <AccordionIcon ml={'auto'}/>
-                            </AccordionButton>
-                            <AccordionPanel pb={4}>
-                                <FormControl>
-                                    <FormLabel>Change data source</FormLabel>
-                                    <HStack justifyContent={'space-evenly'} alignItems={'center'} mb={2}>
-                                        <DataSourceButton activeDataSource={dataSource} setDataSource={setDataSource} dataSourceName={'artist'} buttonText={'Artists'} hasLoaded={hasLoaded}/>
-                                        <DataSourceButton activeDataSource={dataSource} setDataSource={setDataSource} dataSourceName={'album'} buttonText={'Albums'} hasLoaded={hasLoaded}/>
-                                        <DataSourceButton activeDataSource={dataSource} setDataSource={setDataSource} dataSourceName={'track'} buttonText={'Tracks'} hasLoaded={hasLoaded}/>
-                                    </HStack>
-                                    <FormLabel>Change user</FormLabel>
-                                    <HStack>
-                                        <Input onChange={(e) => setCurrentInputUsername(e.target.value)}/>
-                                        <Button pl={5} pr={5} onClick={() => setUsername(currentInputUsername)}>Submit</Button>
-                                    </HStack>
-                                </FormControl>
-                            </AccordionPanel>
-                        </AccordionItem>
-                    </Accordion>
-
+                    <Box>
+                        <HeaderBar/>
+                    </Box>
+                    <UserInfoAccordion
+                        userInfo={userInfo}
+                        dataSource={dataSource}
+                        setDataSource={setDataSource}
+                        hasLoaded={hasLoaded}
+                        setUsername={setUsername}
+                        currentInputUsername={currentInputUsername}
+                        setCurrentInputUsername={setCurrentInputUsername}
+                    />
                     <Box mt={3} ml={5} mr={5}>
                         <CustomDivider text={'Chart Settings'}/>
                         <HStack mb={2} justifyContent={'space-evenly'} alignItems={'center'}>
@@ -482,7 +452,7 @@ function ChartPage() {
                             <Box bg={'gray.900'} pl={5} pr={5} pt={2} pb={2} borderRadius={5}>
                                 <Text fontSize={20} mb={1}>Data smoothing</Text>
                                 <hr/>
-                                <Text mt={1}>{getSmoothingLabel()}</Text>
+                                <Text mt={1}>{getSmoothStrengthLabel(smoothStrength)}</Text>
                                 <Slider defaultValue={0} min={0} max={3} onChange={(val) => setSmoothStrength(val)}>
                                     <SliderTrack>
                                         <SliderFilledTrack />
@@ -496,7 +466,39 @@ function ChartPage() {
                                     <hr/>
                                     <Flex mt={1}>
                                         <Text>Align data to first scrobble</Text>
-                                        <Checkbox ml={2} onChange={() => changeSeriesAlignment()}/>
+                                        <Checkbox ml={2} onChange={() => toggleAlignedToFirstScrobble()}/>
+                                    </Flex>
+                                    <Flex mt={1}>
+                                        <Text>Show chart navigator</Text>
+                                        <Checkbox
+                                            ml={2}
+                                            defaultChecked={true}
+                                            onChange={(e) =>
+                                                setChartOptions((prevOptions) => ({
+                                                    ...prevOptions,
+                                                    navigator: {
+                                                        ...(prevOptions.navigator),
+                                                        enabled: e.target.checked
+                                                    }
+                                                }))
+                                            }
+                                        />
+                                    </Flex>
+                                    <Flex mt={1}>
+                                        <Text>Show chart legend</Text>
+                                        <Checkbox
+                                            defaultChecked={true}
+                                            ml={2}
+                                            onChange={(e) =>
+                                                setChartOptions((prevOptions) => ({
+                                                    ...prevOptions,
+                                                    legend: {
+                                                        ...(prevOptions.legend || {}),
+                                                        enabled: e.target.checked
+                                                    },
+                                                }))
+                                            }
+                                        />
                                     </Flex>
                                 </Box>
                             </Box>
@@ -508,10 +510,9 @@ function ChartPage() {
                                 scrobblingData &&
                                 <AutoCompleteList m={0} p={0}>
                                     {
-                                        sortArray(scrobblingData).map((item, index) => {
+                                        sortArrayByTotalScrobbles(scrobblingData).map((item, index) => {
                                             // Check if the current index is in the activeItems array
                                             const isDisabled = activeItems.includes(index);
-
                                             return (
                                                 <AutoCompleteItem
                                                     key={`item${index}`}
@@ -522,8 +523,23 @@ function ChartPage() {
                                                     m={0}
                                                     disabled={isDisabled}
                                                 >
-                                                    <span>{item.name} · </span>
-                                                    <span style={{fontWeight:'bold', marginLeft:'4px'}}>{item.totalScrobbles}</span>
+                                                    <span>
+                                                        {
+                                                            dataSource === 'artist' ?
+                                                                <span>
+                                                                    {item.name} · <span style={{fontWeight: 'bold'}}>{item.totalScrobbles.toLocaleString()}</span>
+                                                                </span>
+                                                                :
+                                                                <span>
+                                                                    {item.name} · <span style={{fontWeight: 'bold'}}>{item.totalScrobbles.toLocaleString()}</span>
+                                                                    <br/>
+                                                                    <span style={{color: '#7285A5'}}>
+                                                                        {item.artist}
+                                                                    </span>
+                                                                </span>
+                                                        }
+                                                    </span>
+
                                                 </AutoCompleteItem>
                                             );
                                         })
@@ -547,8 +563,8 @@ function ChartPage() {
                                                 borderRadius={'full'}
                                                 variant={'solid'}
                                             >
-                                                <Box borderRadius={'full'} bg={colours[index % colours.length]} w={4} h={4} ml={-1} mr={1}/>
-                                                <TagLabel pb={1} pt={1}>{scrobblingData[item].name}</TagLabel>
+                                                <Box borderRadius={'full'} bg={chartSeriesColours[index % chartSeriesColours.length]} w={4} h={4} ml={-1} mr={1}/>
+                                                <TagLabel pb={1} pt={1}>{truncateText(scrobblingData[item].name)}</TagLabel>
                                                 <TagCloseButton onClick={() => removeFromActiveItems(index)}/>
                                             </Tag>
                                         ))
@@ -562,9 +578,8 @@ function ChartPage() {
                     {
                         scrobblingData !== undefined ?
                             <Fade in={true}>
-                                <HighchartsReact 
-                                    ref={chartRef} 
-                                    highcharts={Highcharts} 
+                                <HighchartsReact
+                                    highcharts={Highcharts}
                                     constructorType={'stockChart'}
                                     options={chartOptions}
                                     containerProps={{ style: { height: '97vh' } }}
