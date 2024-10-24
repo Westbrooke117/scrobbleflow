@@ -1,4 +1,4 @@
-// Used in chart tooltip to maintain consistent tooltip width
+// Used in chart tooltip to maintain consistent tooltip width and in series entries tags
 const truncateText = (text, textCutoff=17) => {
     return text.length > textCutoff ? text.substring(0, textCutoff) + "..." : text
 }

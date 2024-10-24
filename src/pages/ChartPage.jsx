@@ -36,6 +36,7 @@ import {
     smoothDataset,
     sortArrayByTotalScrobbles
 } from "../utils/chartUtils.js";
+import {getLocalStorageItems, saveToLocalStorage} from "../utils/localStorageManager.js";
 
 class ScrobbleItem {
     constructor(name, artist=null){
@@ -92,18 +93,22 @@ function ChartPage() {
     // URL parameters
     const {user} = useParams()
 
-    // State initialisation
+    // API info state
     const [userInfo, setUserInfo] = useState();
     const [scrobblingData, setScrobblingData] = useState();
-    const [activeItems, setActiveItems] = useState([0, 1, 2, 3, 4]);
+    const [currentInputUsername, setCurrentInputUsername] = useState("")
+    const [username, setUsername] = useState(user)
+
+    // Chart visualisation state
     const [dataPresentationMode, setDataPresentationMode] = useState('cumulativeScrobbleData');
     const [chartType, setChartType] = useState('line');
     const [smoothStrength, setSmoothStrength] = useState(0)
     const [alignedToFirstScrobble, setAlignedToFirstScrobble] = useState(false)
-    const [currentInputUsername, setCurrentInputUsername] = useState("")
-    const [username, setUsername] = useState(user)
-    const [hasLoaded, setHasLoaded] = useState(false)
+
+    // Chart management state
+    const [activeItems, setActiveItems] = useState([0, 1, 2, 3, 4]);
     const [dataSource, setDataSource] = useState("artist")
+    const [chartHasLoaded, setChartHasLoaded] = useState(false)
     const [chartOptions, setChartOptions] = useState(
         {
             chart: {
@@ -111,7 +116,7 @@ function ChartPage() {
                 backgroundColor: '#1a202c',
             },
             navigator: {
-                enabled: true,
+                enabled: JSON.parse(localStorage.getItem('navigatorEnabled')) === true,
                 outlineColor: '#3f444e'
             },
             scrollbar: {
@@ -170,7 +175,7 @@ function ChartPage() {
                 }
             },
             legend: {
-                enabled: true,
+                enabled: JSON.parse(localStorage.getItem('legendEnabled')) === true,
                 itemStyle: {'color':'#eeefef'},
                 itemHoverStyle: {
                     color: '#b1b1b1'
@@ -226,6 +231,7 @@ function ChartPage() {
 
     // Get user info on initial page load / when user changes
     useEffect(() => {
+        console.log(getLocalStorageItems())
         getUserInfo(username).then(response => setUserInfo(response))
     }, [username]);
 
@@ -234,11 +240,11 @@ function ChartPage() {
         if (userInfo === undefined) return;
 
         // Used to show loading text on chart area
-        setHasLoaded(false)
+        setChartHasLoaded(false)
 
         const startingUnixSeconds = userInfo.registered['#text'];
 
-        const numberOfScrobblePeriods = 10;
+        const numberOfScrobblePeriods = 150;
         const scrobblingPeriods = generateScrobblingPeriods(startingUnixSeconds, numberOfScrobblePeriods);
 
         // Populating chart with time periods
@@ -352,7 +358,7 @@ function ChartPage() {
             )
         })
 
-        setHasLoaded(true)
+        setChartHasLoaded(true)
 
         return seriesData
     }
@@ -427,7 +433,7 @@ function ChartPage() {
                         userInfo={userInfo}
                         dataSource={dataSource}
                         setDataSource={setDataSource}
-                        hasLoaded={hasLoaded}
+                        hasLoaded={chartHasLoaded}
                         setUsername={setUsername}
                         currentInputUsername={currentInputUsername}
                         setCurrentInputUsername={setCurrentInputUsername}
@@ -472,31 +478,37 @@ function ChartPage() {
                                         <Text>Show chart navigator</Text>
                                         <Checkbox
                                             ml={2}
-                                            defaultChecked={true}
+                                            defaultChecked={JSON.parse(localStorage.getItem('navigatorEnabled')) === true}
                                             onChange={(e) =>
-                                                setChartOptions((prevOptions) => ({
-                                                    ...prevOptions,
-                                                    navigator: {
-                                                        ...(prevOptions.navigator),
-                                                        enabled: e.target.checked
-                                                    }
-                                                }))
+                                                {
+                                                    setChartOptions((prevOptions) => ({
+                                                        ...prevOptions,
+                                                        navigator: {
+                                                            ...(prevOptions.navigator),
+                                                            enabled: e.target.checked
+                                                        }
+                                                    }))
+                                                    saveToLocalStorage({name: 'navigatorEnabled', value: e.target.checked})
+                                                }
                                             }
                                         />
                                     </Flex>
                                     <Flex mt={1}>
                                         <Text>Show chart legend</Text>
                                         <Checkbox
-                                            defaultChecked={true}
+                                            defaultChecked={JSON.parse(localStorage.getItem('legendEnabled')) === true}
                                             ml={2}
                                             onChange={(e) =>
-                                                setChartOptions((prevOptions) => ({
-                                                    ...prevOptions,
-                                                    legend: {
-                                                        ...(prevOptions.legend || {}),
-                                                        enabled: e.target.checked
-                                                    },
-                                                }))
+                                                {
+                                                    setChartOptions((prevOptions) => ({
+                                                        ...prevOptions,
+                                                        legend: {
+                                                            ...(prevOptions.legend || {}),
+                                                            enabled: e.target.checked
+                                                        },
+                                                    }))
+                                                    saveToLocalStorage({name: 'legendEnabled', value: e.target.checked})
+                                                }
                                             }
                                         />
                                     </Flex>

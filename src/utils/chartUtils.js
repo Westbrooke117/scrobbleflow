@@ -24,6 +24,7 @@ const smoothDataset = ([...dataset], smoothStrength) => {
     return smoothedData
 }
 
+// Shown as label above smooth strength slider
 const getSmoothStrengthLabel = (smoothStrength) => {
     const labels = [
         'No smoothing (real data)',
@@ -38,6 +39,7 @@ const sortArrayByTotalScrobbles = (array) => {
     return array.sort((a, b) => b.totalScrobbles - a.totalScrobbles);
 }
 
+// Returns dataset with all items aligned to the first scrobble
 const calculateAlignedDataset = ([...dataset]) => {
     let alignedDataset = []
 
