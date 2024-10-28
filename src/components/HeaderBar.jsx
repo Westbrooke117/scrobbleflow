@@ -13,7 +13,7 @@ const HeaderBar = () => {
                 src={'https://img.icons8.com/m_sharp/200/FFFFFF/github.png'}
                 onClick={() => {window.open('https://github.com/Westbrooke117/scrobbleflow')}}
                 style={{cursor: 'pointer'}}
-                title={'Open on GitHub'}
+                title={'View on GitHub'}
             />
         </HStack>
     )

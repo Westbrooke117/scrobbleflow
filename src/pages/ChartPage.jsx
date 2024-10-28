@@ -91,13 +91,13 @@ class ScrobbleItem {
 
 function ChartPage() {
     // URL parameters
-    const {user} = useParams()
+    const {user, urlDataSource} = useParams()
 
     // API info state
     const [userInfo, setUserInfo] = useState();
     const [scrobblingData, setScrobblingData] = useState();
     const [currentInputUsername, setCurrentInputUsername] = useState("")
-    const [username, setUsername] = useState(user)
+    const [username, setUsername] = useState(useParams().user)
 
     // Chart visualisation state
     const [dataPresentationMode, setDataPresentationMode] = useState('cumulativeScrobbleData');
@@ -107,7 +107,7 @@ function ChartPage() {
 
     // Chart management state
     const [activeItems, setActiveItems] = useState([0, 1, 2, 3, 4]);
-    const [dataSource, setDataSource] = useState("artist")
+    const [dataSource, setDataSource] = useState(useParams().urlDataSource)
     const [chartHasLoaded, setChartHasLoaded] = useState(false)
     const [chartOptions, setChartOptions] = useState(
         {

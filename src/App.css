@@ -4,7 +4,7 @@ body {
 }
 
 .option-button {
-    box-shadow: 0 0 5px #63b3ed inset;
+    border: 1px solid #63b3ed;
 }
 
 a:hover {
