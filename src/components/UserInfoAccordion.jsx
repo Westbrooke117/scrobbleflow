@@ -4,14 +4,19 @@ import {
     AccordionIcon,
     AccordionItem,
     AccordionPanel,
-    Avatar, Button,
-    FormControl, FormLabel, HStack, Input,
+    Avatar, Box, Button,
+    FormControl, FormLabel, HStack, Input, Select,
     Text
 } from "@chakra-ui/react";
-import {DataSourceButton} from "./DataSourceButton.jsx";
 import PropTypes from "prop-types";
+import {useState} from "react";
+import {useParams} from "react-router-dom";
+import {useNavigate} from "react-router-dom";
 
-const UserInfoAccordion = ({userInfo, dataSource, setDataSource, hasLoaded, setUsername, currentInputUsername, setCurrentInputUsername}) => {
+const UserInfoAccordion = ({userInfo, dataSource, setDataSource, setUsername, currentInputUsername, setCurrentInputUsername}) => {
+    const navigate = useNavigate();
+    const [selectedDataSource, setSelectedDataSource] = useState(dataSource)
+
     return (
         <Accordion allowToggle={true}>
             <AccordionItem bg={'gray.900'}>
@@ -34,17 +39,27 @@ const UserInfoAccordion = ({userInfo, dataSource, setDataSource, hasLoaded, setU
                 </AccordionButton>
                 <AccordionPanel pb={4}>
                     <FormControl>
-                        <FormLabel>Change data source</FormLabel>
-                        <HStack justifyContent={'space-evenly'} alignItems={'center'} mb={2}>
-                            <DataSourceButton activeDataSource={dataSource} setDataSource={setDataSource} buttonDataSource={'artist'} buttonText={'Artists'} hasLoaded={hasLoaded}/>
-                            <DataSourceButton activeDataSource={dataSource} setDataSource={setDataSource} buttonDataSource={'album'} buttonText={'Albums'} hasLoaded={hasLoaded}/>
-                            <DataSourceButton activeDataSource={dataSource} setDataSource={setDataSource} buttonDataSource={'track'} buttonText={'Tracks'} hasLoaded={hasLoaded}/>
-                        </HStack>
-                        <FormLabel>Change user</FormLabel>
                         <HStack>
-                            <Input onChange={(e) => setCurrentInputUsername(e.target.value)}/>
-                            <Button pl={5} pr={5} onClick={() => setUsername(currentInputUsername)}>Submit</Button>
+                            <Box w={'40%'}>
+                                <FormLabel mb={1}>Data source</FormLabel>
+                                <Select variant={'filled'} defaultValue={useParams().urlDataSource} onChange={(e) => setSelectedDataSource(e.target.value)}>
+                                    <option value='artist'>Artists</option>
+                                    <option value='album'>Albums</option>
+                                    <option value='track'>Tracks</option>
+                                </Select>
+                            </Box>
+                            <Box w={'60%'}>
+                                <FormLabel mb={1}>User</FormLabel>
+                                <Input onChange={(e) => setCurrentInputUsername(e.target.value)} defaultValue={useParams().user}/>
+                            </Box>
                         </HStack>
+                        <Box w={'100%'} display={'flex'} justifyContent={'center'}>
+                            <Button pl={5} pr={5} mt={3} onClick={() => {
+                                navigate(`/chart/${currentInputUsername}/${selectedDataSource}`)
+                                setUsername(currentInputUsername)
+                                setDataSource(selectedDataSource)
+                            }}>Update</Button>
+                        </Box>
                     </FormControl>
                 </AccordionPanel>
             </AccordionItem>

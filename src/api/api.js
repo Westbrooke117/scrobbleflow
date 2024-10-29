@@ -24,10 +24,13 @@ const getScrobblingDataForAllPeriods = async (username, scrobblingPeriods, categ
     // Note: Sometimes this overloads the API
     await axios.all(scrobblingPeriodRequests.map(period => axios.get(period)))
         .then(axios.spread((...response) => {
-            response.map(period => {
-                scrobblingData.push(period.data[`weekly${category}chart`][category])
-            })
-        }))
+            response.forEach(period => {
+                const data = period.data[`weekly${category}chart`][category];
+                if (data && data.length > 0) {
+                    scrobblingData.push(data);
+                }
+            });
+        }));
 
     return scrobblingData;
 }

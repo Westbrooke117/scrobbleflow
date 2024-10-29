@@ -91,12 +91,12 @@ class ScrobbleItem {
 
 function ChartPage() {
     // URL parameters
-    const {user, urlDataSource} = useParams()
+    const {user} = useParams()
 
     // API info state
     const [userInfo, setUserInfo] = useState();
     const [scrobblingData, setScrobblingData] = useState();
-    const [currentInputUsername, setCurrentInputUsername] = useState("")
+    const [currentInputUsername, setCurrentInputUsername] = useState(useParams().user)
     const [username, setUsername] = useState(useParams().user)
 
     // Chart visualisation state
@@ -253,7 +253,7 @@ function ChartPage() {
             plotOptions: {
                 series: {
                     pointStart: userInfo.registered['#text'] * 1000,
-                    pointInterval: (Date.now() - userInfo.registered['#text'] * 1000) / numberOfScrobblePeriods,
+                    pointInterval: (Date.now() - (userInfo.registered['#text'] * 1000)) / numberOfScrobblePeriods,
                 }
             },
         });
@@ -424,8 +424,8 @@ function ChartPage() {
 
     return (
         <Container maxW={'100%'} p={0} m={0}>
-            <Grid templateColumns={'repeat(6,1fr)'} h={'100vh'}>
-                <GridItem colSpan={1}>
+            <Grid templateColumns={'repeat(12,1fr)'} h={'100vh'}>
+                <GridItem colSpan={3} overflowY={'scroll'} overflowX={'hidden'}>
                     <Box>
                         <HeaderBar/>
                     </Box>
@@ -566,7 +566,7 @@ function ChartPage() {
                         {
                             scrobblingData &&
                             <Fade in={true}>
-                                <Box display={'flex'} flexWrap={'wrap'} mt={2}>
+                                <Box display={'flex'} flexWrap={'wrap'} mt={2} mb={2}>
                                     {
                                         activeItems.map((item, index) => (
                                             <Tag
@@ -586,7 +586,7 @@ function ChartPage() {
                         }
                     </Box>
                 </GridItem>
-                <GridItem colSpan={5} mt={5}>
+                <GridItem colSpan={9} mt={5}>
                     {
                         scrobblingData !== undefined ?
                             <Fade in={true}>
