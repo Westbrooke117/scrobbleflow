@@ -102,6 +102,7 @@ function ChartPage() {
     // Chart visualisation state
     const [dataPresentationMode, setDataPresentationMode] = useState('cumulativeScrobbleData');
     const [chartType, setChartType] = useState('line');
+    const [stackingType, setStackingType] = useState(undefined)
     const [smoothStrength, setSmoothStrength] = useState(0)
     const [alignedToFirstScrobble, setAlignedToFirstScrobble] = useState(false)
 
@@ -120,9 +121,16 @@ function ChartPage() {
                 outlineColor: '#3f444e'
             },
             scrollbar: {
-                enabled: false,
+                enabled: JSON.parse(localStorage.getItem('navigatorEnabled')) === true,
+                barBackgroundColor: '#2c323d',
+                trackBackgroundColor: '#171923',
+                trackBorderColor: '#171923',
+                height: 5
             },
             plotOptions: {
+                series: {
+                    stacking: stackingType,
+                },
                 line: {
                     marker: {
                         enabled: false
@@ -175,7 +183,7 @@ function ChartPage() {
                 }
             },
             legend: {
-                enabled: JSON.parse(localStorage.getItem('legendEnabled')) === true,
+                enabled: JSON.parse(localStorage.getItem('legendEnabled')) === true || localStorage.getItem('legendEnabled') === null,
                 itemStyle: {'color':'#eeefef'},
                 itemHoverStyle: {
                     color: '#b1b1b1'
@@ -231,7 +239,8 @@ function ChartPage() {
 
     // Get user info on initial page load / when user changes
     useEffect(() => {
-        console.log(getLocalStorageItems())
+        if (localStorage.getItem('legendEnabled') === null) localStorage.setItem("legendEnabled", true)
+
         getUserInfo(username).then(response => setUserInfo(response))
     }, [username]);
 
@@ -244,7 +253,7 @@ function ChartPage() {
 
         const startingUnixSeconds = userInfo.registered['#text'];
 
-        const numberOfScrobblePeriods = 150;
+        const numberOfScrobblePeriods = 15;
         const scrobblingPeriods = generateScrobblingPeriods(startingUnixSeconds, numberOfScrobblePeriods);
 
         // Populating chart with time periods
@@ -375,14 +384,25 @@ function ChartPage() {
 
     // Used to regenerate series data when chart settings changes
     useEffect(() => {
+        console.log(stackingType)
+
         scrobblingData &&
-        setChartOptions({
+        setChartOptions((prevOptions) => ({
+            ...prevOptions,
             series: generateSeriesData(),
             chart: {
+                ...prevOptions.chart,
                 type: chartType
+            },
+            plotOptions: {
+                ...prevOptions.plotOptions,
+                series: {
+                    ...prevOptions.series,
+                    stacking: stackingType !== "overlap" ? stackingType : undefined
+                }
             }
-        })
-    },[dataPresentationMode, chartType, activeItems, smoothStrength, alignedToFirstScrobble])
+        }))
+    },[dataPresentationMode, chartType, activeItems, smoothStrength, alignedToFirstScrobble, stackingType])
 
 
 
@@ -424,8 +444,8 @@ function ChartPage() {
 
     return (
         <Container maxW={'100%'} p={0} m={0}>
-            <Grid templateColumns={'repeat(12,1fr)'} h={'100vh'}>
-                <GridItem colSpan={3} overflowY={'scroll'} overflowX={'hidden'}>
+            <Grid templateColumns={'repeat(6,1fr)'} h={'100vh'}>
+                <GridItem colSpan={1} className={'sidebar-column'}>
                     <Box>
                         <HeaderBar/>
                     </Box>
@@ -445,14 +465,22 @@ function ChartPage() {
                             <Button fontSize={14} className={dataPresentationMode === 'noncumulativeScrobbleData' && 'option-button'} w={'100%'} onClick={() => setDataPresentationMode('noncumulativeScrobbleData')}>Non-cumulative</Button>
                             <Button fontSize={14} className={dataPresentationMode === 'periodRankingPositions' && 'option-button'} w={'100%'} onClick={() => setDataPresentationMode('periodRankingPositions')}>Ranking</Button>
                         </HStack>
-                        <Select mb={3} variant={'filled'} maxW={'100%'}
-                                onChange={(e) => setChartType(e.target.value)}>
-                            <option value={"line"}>Line</option>
-                            <option value={"column"}>Column</option>
-                            <option value={"area"}>Area</option>
-                            <option value={"scatter"}>Scatter</option>
-                            <option value={"spline"}>Smooth line</option>
-                        </Select>
+                        <HStack>
+                            <Select mb={3} variant={'filled'} maxW={'100%'}
+                                    onChange={(e) => setChartType(e.target.value)}>
+                                <option value={"line"}>Line</option>
+                                <option value={"spline"}>Smooth line</option>
+                                <option value={"column"}>Column</option>
+                                <option value={"area"}>Area</option>
+                                <option value={"areaspline"}>Smooth area</option>
+                            </Select>
+                            <Select mb={3} variant={'filled'} maxW={'100%'}
+                                    onChange={(e) => setStackingType(e.target.value)}>
+                                <option value={"overlap"}>No stacking</option>
+                                <option value={"normal"}>Stacked</option>
+                                <option value={"percent"}>Percentage</option>
+                            </Select>
+                        </HStack>
                         <CustomDivider text={'Visualisation Options'}/>
                         <Box mb={2}>
                             <Box bg={'gray.900'} pl={5} pr={5} pt={2} pb={2} borderRadius={5}>
@@ -486,6 +514,10 @@ function ChartPage() {
                                                         navigator: {
                                                             ...(prevOptions.navigator),
                                                             enabled: e.target.checked
+                                                        },
+                                                        scrollbar: {
+                                                            ...(prevOptions.navigator),
+                                                            enabled: e.target.checked
                                                         }
                                                     }))
                                                     saveToLocalStorage({name: 'navigatorEnabled', value: e.target.checked})
@@ -496,7 +528,7 @@ function ChartPage() {
                                     <Flex mt={1}>
                                         <Text>Show chart legend</Text>
                                         <Checkbox
-                                            defaultChecked={JSON.parse(localStorage.getItem('legendEnabled')) === true}
+                                            defaultChecked={JSON.parse(localStorage.getItem('legendEnabled')) === true || localStorage.getItem('legendEnabled') === null}
                                             ml={2}
                                             onChange={(e) =>
                                                 {
@@ -586,7 +618,7 @@ function ChartPage() {
                         }
                     </Box>
                 </GridItem>
-                <GridItem colSpan={9} mt={5}>
+                <GridItem colSpan={5} mt={5} mr={5}>
                     {
                         scrobblingData !== undefined ?
                             <Fade in={true}>

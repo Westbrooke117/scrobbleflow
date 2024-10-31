@@ -37,10 +37,10 @@ const UserInfoAccordion = ({userInfo, dataSource, setDataSource, setUsername, cu
                     }
                     <AccordionIcon ml={'auto'}/>
                 </AccordionButton>
-                <AccordionPanel pb={4}>
+                <AccordionPanel pb={2}>
                     <FormControl>
                         <HStack>
-                            <Box w={'40%'}>
+                            <Box w={'30%'}>
                                 <FormLabel mb={1}>Data source</FormLabel>
                                 <Select variant={'filled'} defaultValue={useParams().urlDataSource} onChange={(e) => setSelectedDataSource(e.target.value)}>
                                     <option value='artist'>Artists</option>
@@ -48,18 +48,19 @@ const UserInfoAccordion = ({userInfo, dataSource, setDataSource, setUsername, cu
                                     <option value='track'>Tracks</option>
                                 </Select>
                             </Box>
-                            <Box w={'60%'}>
+                            <Box w={'50%'}>
                                 <FormLabel mb={1}>User</FormLabel>
                                 <Input onChange={(e) => setCurrentInputUsername(e.target.value)} defaultValue={useParams().user}/>
                             </Box>
+                            <Box w={'20%'}>
+                                <FormLabel mb={1}>‎ </FormLabel>
+                                <Button onClick={() => {
+                                    navigate(`/chart/${currentInputUsername}/${selectedDataSource}`)
+                                    setUsername(currentInputUsername)
+                                    setDataSource(selectedDataSource)
+                                }}>Update</Button>
+                            </Box>
                         </HStack>
-                        <Box w={'100%'} display={'flex'} justifyContent={'center'}>
-                            <Button pl={5} pr={5} mt={3} onClick={() => {
-                                navigate(`/chart/${currentInputUsername}/${selectedDataSource}`)
-                                setUsername(currentInputUsername)
-                                setDataSource(selectedDataSource)
-                            }}>Update</Button>
-                        </Box>
                     </FormControl>
                 </AccordionPanel>
             </AccordionItem>

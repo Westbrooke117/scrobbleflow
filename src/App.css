@@ -10,3 +10,7 @@ body {
 a:hover {
     text-decoration: underline;
 }
+
+.highcharts-scrolling::-webkit-scrollbar {
+    display: none !important;
+}
