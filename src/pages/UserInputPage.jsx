@@ -30,7 +30,7 @@ const UserInputPage = () => {
                     <Box></Box>
                     <Box>
                         <HStack alignItems={'center'} mb={5}>
-                            <Image src={'../public/icon.svg'} maxH={65} borderRadius={10}/>
+                            <Image src={'assets/icon.svg'} maxH={65} borderRadius={10}/>
                             <Box>
                                 <Heading>ScrobbleFlow</Heading>
                                 <Text color={'gray.500'}>Interactive and dynamic charts of your last.fm listening history</Text>
