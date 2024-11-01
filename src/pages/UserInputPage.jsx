@@ -3,12 +3,13 @@ import {
     Button,
     Input,
     Container,
-    Box,
+    Box, 
     HStack,
     Text,
     Fade,
     Heading,
     VStack,
+    Image,
     Select
 } from "@chakra-ui/react";
 import {useState} from "react";
@@ -28,8 +29,13 @@ const UserInputPage = () => {
                 <VStack justifyContent={'space-between'}>
                     <Box></Box>
                     <Box>
-                        <Heading>ScrobbleFlow</Heading>
-                        <Text mb={5} color={'gray.500'}>Interactive and dynamic charts of your last.fm listening history</Text>
+                        <HStack alignItems={'center'} mb={5}>
+                            <Image src={'../public/icon.svg'} maxH={65} borderRadius={10}/>
+                            <Box>
+                                <Heading>ScrobbleFlow</Heading>
+                                <Text color={'gray.500'}>Interactive and dynamic charts of your last.fm listening history</Text>
+                            </Box>
+                        </HStack>
                         <HStack whiteSpace={'nowrap'}>
                             <Text fontSize={24}>last.fm/user/</Text>
                             <Input mt={0.5} color={'#90cdf4'} ml={-1.5} placeholder={'last.fm username...'} fontSize={24} minW={'fit-content'} type={'text'} variant={'flushed'} onChange={(e) => {setInputUsername(e.target.value)}}/>

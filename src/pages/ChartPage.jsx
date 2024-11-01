@@ -253,7 +253,7 @@ function ChartPage() {
 
         const startingUnixSeconds = userInfo.registered['#text'];
 
-        const numberOfScrobblePeriods = 15;
+        const numberOfScrobblePeriods = 150;
         const scrobblingPeriods = generateScrobblingPeriods(startingUnixSeconds, numberOfScrobblePeriods);
 
         // Populating chart with time periods
