@@ -14,6 +14,9 @@ import {
 } from "@chakra-ui/react";
 import {useState} from "react";
 
+import ReactGA from "react-ga4";
+ReactGA.initialize("G-F7YB9324QD");
+
 const UserInputPage = () => {
     const navigate = useNavigate();
     const [inputUsername, setInputUsername] = useState("");
