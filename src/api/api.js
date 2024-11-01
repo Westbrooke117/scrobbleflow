@@ -5,7 +5,8 @@ const getUserInfo = async (username) => {
 
     // Get user info for username, profile picture, and account registration date
     await axios.get(`https://ws.audioscrobbler.com/2.0/?method=user.getinfo&user=${username}&api_key=82d112e473f59ade0157abe4a47d4eb5&format=json`)
-        .catch(error => console.log(error)).then(response => responseData = response.data.user);
+        .catch(error => alert(`Error! Please try again in a few seconds\nError log: ${error}`))
+        .then(response => responseData = response.data.user);
 
     return responseData;
 }
@@ -23,6 +24,7 @@ const getScrobblingDataForAllPeriods = async (username, scrobblingPeriods, categ
     // Send all API requests
     // Note: Sometimes this overloads the API
     await axios.all(scrobblingPeriodRequests.map(period => axios.get(period)))
+        .catch(error => alert(`Error! Please try again in a few seconds\nError log: ${error}`))
         .then(axios.spread((...response) => {
             response.forEach(period => {
                 const data = period.data[`weekly${category}chart`][category];

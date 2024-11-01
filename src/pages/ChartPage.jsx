@@ -98,6 +98,7 @@ function ChartPage() {
     const [scrobblingData, setScrobblingData] = useState();
     const [currentInputUsername, setCurrentInputUsername] = useState(useParams().user)
     const [username, setUsername] = useState(useParams().user)
+    const [loadingText, setLoadingText] = useState('')
 
     // Chart visualisation state
     const [dataPresentationMode, setDataPresentationMode] = useState('cumulativeScrobbleData');
@@ -249,6 +250,7 @@ function ChartPage() {
         if (userInfo === undefined) return;
 
         // Used to show loading text on chart area
+        setLoadingText(`loading ${user}'s ${dataSource} chart`)
         setChartHasLoaded(false)
 
         const startingUnixSeconds = userInfo.registered['#text'];
@@ -631,7 +633,7 @@ function ChartPage() {
                             </Fade>
                             :
                             <HStack w={'100%'} h={'100vh'} justifyContent={'center'} alignItems={'center'}>
-                                <Text>loading {user}'s {dataSource} chart</Text>
+                                <Text>{loadingText}</Text>
                                 <Spinner/>
                             </HStack>
                     }
