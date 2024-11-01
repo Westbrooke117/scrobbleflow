@@ -36,7 +36,7 @@ const UserInputPage = () => {
                             <Image src={'assets/icon.svg'} maxH={65} borderRadius={10}/>
                             <Box>
                                 <Heading>ScrobbleFlow</Heading>
-                                <Text color={'gray.500'}>Interactive and dynamic charts of your last.fm listening history</Text>
+                                <Text whiteSpace={'nowrap'} color={'gray.500'}>Interactive and dynamic charts of your last.fm listening history</Text>
                             </Box>
                         </HStack>
                         <HStack whiteSpace={'nowrap'}>
