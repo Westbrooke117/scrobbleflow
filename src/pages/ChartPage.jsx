@@ -551,7 +551,7 @@ function ChartPage() {
                         </Box>
                         <CustomDivider text={'Series Entries'}/>
                         <AutoComplete openOnFocus listAllValuesOnFocus={true} maxSuggestions={50} onChange={(val) => addToActiveItems(val)}>
-                            <AutoCompleteInput variant={'outline'}/>
+                            <AutoCompleteInput placeholder={`Search for ${dataSource}...`} variant={'outline'}/>
                             {
                                 scrobblingData &&
                                 <AutoCompleteList m={0} p={0}>
