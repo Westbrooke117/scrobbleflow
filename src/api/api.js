@@ -5,7 +5,7 @@ const getUserInfo = async (username) => {
 
     // Get user info for username, profile picture, and account registration date
     await axios.get(`https://ws.audioscrobbler.com/2.0/?method=user.getinfo&user=${username}&api_key=82d112e473f59ade0157abe4a47d4eb5&format=json`)
-        .catch(error => alert(`Error! Please try again in a few seconds\nError log: ${error}`))
+        .catch(error => alert(`Error! Please try again in 15 seconds\n\nNote: If you are getting an error consistently it's likely due to you having too many tracks/artists/albums. Please select a smaller time period on the start page and try again.\n\nError log: ${error}`))
         .then(response => responseData = response.data.user);
 
     return responseData;

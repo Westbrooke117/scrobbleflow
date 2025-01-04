@@ -5,17 +5,20 @@ import {
     AccordionItem,
     AccordionPanel,
     Avatar, Box, Button,
-    FormControl, FormLabel, HStack, Input, Select,
+    FormControl, FormLabel, HStack, Input, InputGroup, InputLeftAddon, Select,
     Text
 } from "@chakra-ui/react";
 import PropTypes from "prop-types";
 import {useState} from "react";
 import {useParams} from "react-router-dom";
 import {useNavigate} from "react-router-dom";
+import {convertTimePeriodToFullDescription, getStartDateFromTimePeriod} from "../utils/helperFunctions.js";
 
-const UserInfoAccordion = ({userInfo, dataSource, setDataSource, setUsername, currentInputUsername, setCurrentInputUsername}) => {
+const UserInfoAccordion = ({userInfo, setDataSource, setUsername, currentInputUsername, setCurrentInputUsername, setStartDate}) => {
     const navigate = useNavigate();
-    const [selectedDataSource, setSelectedDataSource] = useState(dataSource)
+
+    const [selectedDataSource, setSelectedDataSource] = useState(useParams().urlDataSource)
+    const [selectedTimeRange, setSelectedTimeRange] = useState(useParams().timePeriod)
 
     return (
         <Accordion allowToggle={true}>
@@ -39,27 +42,33 @@ const UserInfoAccordion = ({userInfo, dataSource, setDataSource, setUsername, cu
                 </AccordionButton>
                 <AccordionPanel pb={2}>
                     <FormControl>
-                        <HStack>
-                            <Box w={'30%'}>
-                                <FormLabel mb={1}>Data source</FormLabel>
-                                <Select variant={'filled'} defaultValue={useParams().urlDataSource} onChange={(e) => setSelectedDataSource(e.target.value)}>
-                                    <option value='artist'>Artists</option>
-                                    <option value='album'>Albums</option>
-                                    <option value='track'>Tracks</option>
-                                </Select>
-                            </Box>
-                            <Box w={'50%'}>
-                                <FormLabel mb={1}>User</FormLabel>
-                                <Input onChange={(e) => setCurrentInputUsername(e.target.value)} defaultValue={useParams().user}/>
-                            </Box>
-                            <Box w={'20%'}>
-                                <FormLabel mb={1}>‎ </FormLabel>
-                                <Button onClick={() => {
-                                    navigate(`/chart/${currentInputUsername}/${selectedDataSource}`)
-                                    setUsername(currentInputUsername)
-                                    setDataSource(selectedDataSource)
-                                }}>Update</Button>
-                            </Box>
+                        <InputGroup mb={2}>
+                            <InputLeftAddon>User</InputLeftAddon>
+                            <Input onChange={(e) => setCurrentInputUsername(e.target.value)} defaultValue={useParams().user}/>
+                        </InputGroup>
+                        <HStack justifyContent={'space-evenly'}>
+                            <Select variant={'filled'} defaultValue={useParams().urlDataSource} onChange={(e) => setSelectedDataSource(e.target.value)}>
+                                <option value='artist'>Artists</option>
+                                <option value='album'>Albums</option>
+                                <option value='track'>Tracks</option>
+                            </Select>
+                            <Select variant={'filled'} defaultValue={useParams().timePeriod} onChange={(e) => setSelectedTimeRange(e.target.value)}>
+                                <option value='overall'>All time</option>
+                                <option value='lastyear'>Last 365 days</option>
+                                <option value='6month'>Last 180 days</option>
+                                <option value='3month'>Last 90 days</option>
+                                <option value='lastmonth'>Last 30 days</option>
+                            </Select>
+                            <Button colorScheme={'blue'} pl={7} pr={7} onClick={() => {
+                                navigate(`/chart/${currentInputUsername}/${selectedDataSource}/${selectedTimeRange}`)
+                                setUsername(currentInputUsername)
+                                setDataSource(selectedDataSource)
+                                if (selectedTimeRange === 'overall') {
+                                    setStartDate(Math.floor(userInfo.registered['#text']));
+                                } else {
+                                    setStartDate(Math.floor((getStartDateFromTimePeriod(selectedTimeRange) / 1000)));
+                                }
+                            }}>Update</Button>
                         </HStack>
                     </FormControl>
                 </AccordionPanel>
@@ -69,8 +78,8 @@ const UserInfoAccordion = ({userInfo, dataSource, setDataSource, setUsername, cu
 }
 
 UserInfoAccordion.propTypes = {
+    setStartDate: PropTypes.func.isRequired,
     userInfo: PropTypes.object.isRequired,
-    dataSource: PropTypes.string.isRequired,
     setDataSource: PropTypes.func.isRequired,
     hasLoaded: PropTypes.bool.isRequired,
     setUsername: PropTypes.func.isRequired,

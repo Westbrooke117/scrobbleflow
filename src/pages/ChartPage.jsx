@@ -22,12 +22,12 @@ import {
     SliderThumb,
     Flex,
     Fade,
-    Spinner,
+    Spinner, Tooltip,
 } from "@chakra-ui/react";
 import {useParams} from "react-router-dom";
 import {CustomDivider} from "../components/CustomDivider.jsx";
 import {AutoComplete, AutoCompleteInput, AutoCompleteItem, AutoCompleteList} from "@choc-ui/chakra-autocomplete";
-import {deepCopy, truncateText} from "../utils/helperFunctions.js";
+import {deepCopy, getStartDateFromTimePeriod, truncateText} from "../utils/helperFunctions.js";
 import {HeaderBar} from "../components/HeaderBar.jsx";
 import {UserInfoAccordion} from "../components/UserInfoAccordion.jsx";
 import {
@@ -92,6 +92,7 @@ class ScrobbleItem {
 function ChartPage() {
     // URL parameters
     const {user} = useParams()
+    let {timePeriod} = useParams()
 
     // API info state
     const [userInfo, setUserInfo] = useState();
@@ -99,6 +100,7 @@ function ChartPage() {
     const [currentInputUsername, setCurrentInputUsername] = useState(useParams().user)
     const [username, setUsername] = useState(useParams().user)
     const [loadingText, setLoadingText] = useState('')
+    const [startDate, setStartDate] = useState(Math.floor((getStartDateFromTimePeriod(timePeriod)/1000)))
 
     // Chart visualisation state
     const [dataPresentationMode, setDataPresentationMode] = useState('cumulativeScrobbleData');
@@ -111,8 +113,7 @@ function ChartPage() {
     const [activeItems, setActiveItems] = useState([0, 1, 2, 3, 4]);
     const [dataSource, setDataSource] = useState(useParams().urlDataSource)
     const [chartHasLoaded, setChartHasLoaded] = useState(false)
-    const [chartOptions, setChartOptions] = useState(
-        {
+    const [chartOptions, setChartOptions] = useState({
             chart: {
                 type: chartType,
                 backgroundColor: '#1a202c',
@@ -235,46 +236,53 @@ function ChartPage() {
                 title: ""
             },
             series: {}
-        }
-    );
+        });
 
     // Get user info on initial page load / when user changes
     useEffect(() => {
         if (localStorage.getItem('legendEnabled') === null) localStorage.setItem("legendEnabled", true)
 
-        getUserInfo(username).then(response => setUserInfo(response))
+        getUserInfo(username).then(response => {
+            if (timePeriod === 'overall') setStartDate(response.registered['#text'])
+            setUserInfo(response)
+        })
     }, [username]);
 
     useEffect(() => {
-        // Wait for userInfo to be populated
-        if (userInfo === undefined) return;
+        if (userInfo === undefined || startDate === undefined) return;
 
-        // Used to show loading text on chart area
-        setLoadingText(`loading ${user}'s ${dataSource} chart`)
-        setChartHasLoaded(false)
+        setLoadingText(`loading ${user}'s ${dataSource} chart`);
+        setChartHasLoaded(false);
 
-        const startingUnixSeconds = userInfo.registered['#text'];
+        if (timePeriod === 'overall') setStartDate(userInfo.registered['#text'])
 
-        const numberOfScrobblePeriods = 150;
-        const scrobblingPeriods = generateScrobblingPeriods(startingUnixSeconds, numberOfScrobblePeriods);
+        const timePeriodToScrobblePeriod = {
+            "overall" : 150,
+            "lastyear" : 150,
+            "6month" : 180,
+            "3month" : 90,
+            "lastmonth" : 30,
+        }
 
-        // Populating chart with time periods
+        const userRegistrationUnixTime = startDate;
+        const numberOfScrobblePeriods = timePeriodToScrobblePeriod[timePeriod];
+        const scrobblingPeriods = generateScrobblingPeriods(userRegistrationUnixTime, numberOfScrobblePeriods);
+
         setChartOptions({
             ...chartOptions,
             plotOptions: {
                 series: {
-                    pointStart: userInfo.registered['#text'] * 1000,
-                    pointInterval: (Date.now() - (userInfo.registered['#text'] * 1000)) / numberOfScrobblePeriods,
+                    pointStart: startDate * 1000,
+                    pointInterval: (Date.now() - (startDate * 1000)) / numberOfScrobblePeriods,
                 }
             },
         });
 
-        // Get scrobbling data from last.fm API for each period
         getScrobblingDataForAllPeriods(username, scrobblingPeriods, dataSource)
             .then(response => {
-                setScrobblingData(createScrobblingDataObjects(response))
-            })
-    },[userInfo, dataSource]);
+                setScrobblingData(createScrobblingDataObjects(response));
+            });
+    }, [userInfo, dataSource, startDate]);
 
     const createScrobblingDataObjects = (scrobblingData) => {
         let listOfItemNames = new Set();
@@ -315,23 +323,25 @@ function ChartPage() {
         return formattedScrobblingData;
     };
 
-    const generateScrobblingPeriods = (startingUnix, numberOfScrobblePeriods) => {
+    const generateScrobblingPeriods = (userRegistrationUnixTime, numberOfScrobblePeriods) => {
         const currentUnixSeconds = Date.now() / 1000;
-        const periodLengthSeconds = Math.floor((currentUnixSeconds - startingUnix)/numberOfScrobblePeriods); //Max limit of scrobbling periods to prevent API overload
+
+        const periodLengthSeconds = Math.floor((currentUnixSeconds - startDate) / numberOfScrobblePeriods ); //Max limit of scrobbling periods to prevent API overload
+        // const periodLengthSeconds = Math.floor((currentUnixSeconds - userRegistrationUnixTime)/numberOfScrobblePeriods); //Max limit of scrobbling periods to prevent API overload
 
         let scrobblingPeriods = [];
         
         // Generate "from" and "to" unix timestamps for api requests
-        for (let scrobblingPeriod = startingUnix; scrobblingPeriod < currentUnixSeconds; scrobblingPeriod += periodLengthSeconds) {
+        for (let scrobblingPeriod = startDate; scrobblingPeriod < currentUnixSeconds; scrobblingPeriod += periodLengthSeconds) {
 
-            let fromUnix = scrobblingPeriod;
-            let toUnix = scrobblingPeriod + periodLengthSeconds;
+            let periodStartUnix = scrobblingPeriod;
+            let periodEndUnix = scrobblingPeriod + periodLengthSeconds;
 
             scrobblingPeriods.push({
-                fromUnix: fromUnix,
-                toUnix: toUnix,
-                fromDate: new Date(fromUnix * 1000).toUTCString(),
-                toDate: new Date(toUnix * 1000).toUTCString()});
+                fromUnix: periodStartUnix,
+                toUnix: periodEndUnix,
+                fromDate: new Date(periodStartUnix * 1000).toUTCString(),
+                toDate: new Date(periodEndUnix * 1000).toUTCString()});
         }
         return scrobblingPeriods;
     }
@@ -386,8 +396,6 @@ function ChartPage() {
 
     // Used to regenerate series data when chart settings changes
     useEffect(() => {
-        console.log(stackingType)
-
         scrobblingData &&
         setChartOptions((prevOptions) => ({
             ...prevOptions,
@@ -438,10 +446,8 @@ function ChartPage() {
     }
 
     /*
-    TODO: Options to choose the period (e.g. last year, last 3 months, etc.)
     TODO: Allow forecasting of data?
     TODO: Better feedback for loading and error handling
-    TODO: Improve initial page for user and period input
      */
 
     return (
@@ -453,9 +459,9 @@ function ChartPage() {
                     </Box>
                     <UserInfoAccordion
                         userInfo={userInfo}
-                        dataSource={dataSource}
                         setDataSource={setDataSource}
                         hasLoaded={chartHasLoaded}
+                        setStartDate={setStartDate}
                         setUsername={setUsername}
                         currentInputUsername={currentInputUsername}
                         setCurrentInputUsername={setCurrentInputUsername}
@@ -463,9 +469,9 @@ function ChartPage() {
                     <Box mt={3} ml={5} mr={5}>
                         <CustomDivider text={'Chart Settings'}/>
                         <HStack mb={2} justifyContent={'space-evenly'} alignItems={'center'}>
-                            <Button fontSize={14} className={dataPresentationMode === 'cumulativeScrobbleData' && 'option-button'} w={'100%'} onClick={() => setDataPresentationMode('cumulativeScrobbleData')}>Cumulative</Button>
-                            <Button fontSize={14} className={dataPresentationMode === 'noncumulativeScrobbleData' && 'option-button'} w={'100%'} onClick={() => setDataPresentationMode('noncumulativeScrobbleData')}>Non-cumulative</Button>
-                            <Button fontSize={14} className={dataPresentationMode === 'periodRankingPositions' && 'option-button'} w={'100%'} onClick={() => setDataPresentationMode('periodRankingPositions')}>Ranking</Button>
+                            <Button className={dataPresentationMode === 'cumulativeScrobbleData' && 'option-button'} w={'100%'} onClick={() => setDataPresentationMode('cumulativeScrobbleData')}>Cumulative</Button>
+                            <Button pl={6} pr={6} className={dataPresentationMode === 'noncumulativeScrobbleData' && 'option-button'} w={'100%'} onClick={() => setDataPresentationMode('noncumulativeScrobbleData')}>Non-cumulative</Button>
+                            <Button className={dataPresentationMode === 'periodRankingPositions' && 'option-button'} w={'100%'} onClick={() => setDataPresentationMode('periodRankingPositions')}>Ranking</Button>
                         </HStack>
                         <HStack>
                             <Select mb={3} variant={'filled'} maxW={'100%'}
@@ -573,14 +579,14 @@ function ChartPage() {
                                                         {
                                                             dataSource === 'artist' ?
                                                                 <span>
-                                                                    {item.name} · <span style={{fontWeight: 'bold'}}>{item.totalScrobbles.toLocaleString()}</span>
+                                                                    {truncateText(item.name, 40)} · <span style={{fontWeight: 'bold'}}>{item.totalScrobbles.toLocaleString()}</span>
                                                                 </span>
                                                                 :
                                                                 <span>
-                                                                    {item.name} · <span style={{fontWeight: 'bold'}}>{item.totalScrobbles.toLocaleString()}</span>
+                                                                    {truncateText(item.name, 40)} · <span style={{fontWeight: 'bold'}}>{item.totalScrobbles.toLocaleString()}</span>
                                                                     <br/>
                                                                     <span style={{color: '#7285A5'}}>
-                                                                        {item.artist}
+                                                                        {truncateText(item.artist, 40)}
                                                                     </span>
                                                                 </span>
                                                         }
@@ -604,6 +610,7 @@ function ChartPage() {
                                     {
                                         activeItems.map((item, index) => (
                                             <Tag
+                                                title={scrobblingData[item].name.length > 17 ? scrobblingData[item].name : ""}
                                                 m={1}
                                                 key={item}
                                                 borderRadius={'full'}

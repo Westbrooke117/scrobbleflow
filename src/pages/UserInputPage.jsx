@@ -6,7 +6,6 @@ import {
     Box, 
     HStack,
     Text,
-    Fade,
     Heading,
     VStack,
     Image,
@@ -21,9 +20,10 @@ const UserInputPage = () => {
     const navigate = useNavigate();
     const [inputUsername, setInputUsername] = useState("");
     const [dataSourceOption, setDataSourceOption] = useState("artist")
+    const [timePeriod, setTimePeriod] = useState("overall")
 
     const handleClick = (user) => {
-        navigate(`/chart/${user}/${dataSourceOption}`);
+        navigate(`/chart/${user}/${dataSourceOption}/${timePeriod}`);
     }
 
     return (
@@ -32,7 +32,7 @@ const UserInputPage = () => {
                 <VStack justifyContent={'space-between'}>
                     <Box></Box>
                     <Box>
-                        <HStack alignItems={'center'} mb={5}>
+                        <HStack alignItems={'center'} mb={5} ml={-4}>
                             <Image src={'assets/icon.svg'} maxH={65} borderRadius={10}/>
                             <Box>
                                 <Heading>ScrobbleFlow</Heading>
@@ -42,20 +42,26 @@ const UserInputPage = () => {
                         <HStack whiteSpace={'nowrap'}>
                             <Text fontSize={24}>last.fm/user/</Text>
                             <Input mt={0.5} color={'#90cdf4'} ml={-1.5} placeholder={'last.fm username...'} fontSize={24} minW={'fit-content'} type={'text'} variant={'flushed'} onChange={(e) => {setInputUsername(e.target.value)}}/>
-                            <Select variant={'filled'} minW={28} onChange={(e) => setDataSourceOption(e.target.value)}>
+                        </HStack>
+                        <HStack mt={3}>
+                            <Select variant={'filled'} onChange={(e) => setDataSourceOption(e.target.value)}>
                                 <option value='artist'>Artists</option>
                                 <option value='album'>Albums</option>
                                 <option value='track'>Tracks</option>
                             </Select>
-                            <Fade in={inputUsername !== ""}>
-                                <HStack justifyContent={'center'}>
-                                    <Button
-                                        variant={'outline'}
-                                        minW={'fit-content'}
-                                        onClick={() => handleClick(inputUsername)}
-                                    >View Charts</Button>
-                                </HStack>
-                            </Fade>
+                            <Select variant={'filled'} onChange={(e) => setTimePeriod(e.target.value)}>
+                                <option value='overall'>All time</option>
+                                <option value='lastyear'>Last 365 days</option>
+                                <option value='6month'>Last 180 days</option>
+                                <option value='3month'>Last 90 days</option>
+                                <option value='lastmonth'>Last 30 days</option>
+                            </Select>
+                            <Button
+                                isDisabled={inputUsername.length === 0}
+                                variant={'outline'}
+                                minW={'fit-content'}
+                                onClick={() => handleClick(inputUsername)}
+                            >View Charts</Button>
                         </HStack>
                     </Box>
                     <Box mb={10} border={'1px solid #3f444e'} p={3} borderRadius={10}>
