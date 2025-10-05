@@ -1,6 +1,12 @@
-// Used in chart tooltip to maintain consistent tooltip width and in series entries tags
-const truncateText = (text, textCutoff=17) => {
-    return text.length > textCutoff ? text.substring(0, textCutoff) + "..." : text
+const truncateText = (text, maxLength = 17) => {
+    if (!text) return '';
+
+    const str = String(text);
+    if (str.length <= maxLength) {
+        return str;
+    }
+
+    return str.slice(0, maxLength) + '...';
 }
 
 // Used for setting chart data (because for some stupid reason highcharts mutates the state otherwise)

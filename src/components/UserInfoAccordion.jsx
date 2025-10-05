@@ -14,11 +14,13 @@ import {useParams} from "react-router-dom";
 import {useNavigate} from "react-router-dom";
 import {convertTimePeriodToFullDescription, getStartDateFromTimePeriod} from "../utils/helperFunctions.js";
 
-const UserInfoAccordion = ({userInfo, setDataSource, setUsername, currentInputUsername, setCurrentInputUsername, setStartDate}) => {
+const UserInfoAccordion = ({userInfo, setDataSource, setUsername, currentInputUsername, setCurrentInputUsername, setStartDate, setTimePeriod}) => {
     const navigate = useNavigate();
+    const params = useParams();
 
-    const [selectedDataSource, setSelectedDataSource] = useState(useParams().urlDataSource)
-    const [selectedTimeRange, setSelectedTimeRange] = useState(useParams().timePeriod)
+    const [selectedDataSource, setSelectedDataSource] = useState(params.urlDataSource)
+    const [selectedTimeRange, setSelectedTimeRange] = useState(params.timePeriod)
+    const [inputValue, setInputValue] = useState(params.user)
 
     return (
         <Accordion allowToggle={true}>
@@ -44,15 +46,18 @@ const UserInfoAccordion = ({userInfo, setDataSource, setUsername, currentInputUs
                     <FormControl>
                         <InputGroup mb={2}>
                             <InputLeftAddon>User</InputLeftAddon>
-                            <Input onChange={(e) => setCurrentInputUsername(e.target.value)} defaultValue={useParams().user}/>
+                            <Input
+                                value={inputValue}
+                                onChange={(e) => setInputValue(e.target.value)}
+                            />
                         </InputGroup>
                         <HStack justifyContent={'space-evenly'}>
-                            <Select variant={'filled'} defaultValue={useParams().urlDataSource} onChange={(e) => setSelectedDataSource(e.target.value)}>
+                            <Select variant={'filled'} defaultValue={params.urlDataSource} onChange={(e) => setSelectedDataSource(e.target.value)}>
                                 <option value='artist'>Artists</option>
                                 <option value='album'>Albums</option>
                                 <option value='track'>Tracks</option>
                             </Select>
-                            <Select variant={'filled'} defaultValue={useParams().timePeriod} onChange={(e) => setSelectedTimeRange(e.target.value)}>
+                            <Select variant={'filled'} defaultValue={params.timePeriod} onChange={(e) => setSelectedTimeRange(e.target.value)}>
                                 <option value='overall'>All time</option>
                                 <option value='lastyear'>Last 365 days</option>
                                 <option value='6month'>Last 180 days</option>
@@ -60,11 +65,15 @@ const UserInfoAccordion = ({userInfo, setDataSource, setUsername, currentInputUs
                                 <option value='lastmonth'>Last 30 days</option>
                             </Select>
                             <Button colorScheme={'blue'} pl={7} pr={7} onClick={() => {
-                                navigate(`/chart/${currentInputUsername}/${selectedDataSource}/${selectedTimeRange}`)
-                                setUsername(currentInputUsername)
+                                navigate(`/chart/${inputValue}/${selectedDataSource}/${selectedTimeRange}`)
+                                setCurrentInputUsername(inputValue)
+                                setUsername(inputValue)
                                 setDataSource(selectedDataSource)
+                                setTimePeriod(selectedTimeRange)
                                 if (selectedTimeRange === 'overall') {
-                                    setStartDate(Math.floor(userInfo.registered['#text']));
+                                    if (userInfo?.registered?.['#text']) {
+                                        setStartDate(Math.floor(userInfo.registered['#text']));
+                                    }
                                 } else {
                                     setStartDate(Math.floor((getStartDateFromTimePeriod(selectedTimeRange) / 1000)));
                                 }
@@ -79,7 +88,8 @@ const UserInfoAccordion = ({userInfo, setDataSource, setUsername, currentInputUs
 
 UserInfoAccordion.propTypes = {
     setStartDate: PropTypes.func.isRequired,
-    userInfo: PropTypes.object.isRequired,
+    setTimePeriod: PropTypes.func.isRequired,
+    userInfo: PropTypes.object,
     setDataSource: PropTypes.func.isRequired,
     hasLoaded: PropTypes.bool.isRequired,
     setUsername: PropTypes.func.isRequired,

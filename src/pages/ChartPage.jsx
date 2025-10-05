@@ -91,16 +91,17 @@ class ScrobbleItem {
 
 function ChartPage() {
     // URL parameters
-    const {user} = useParams()
-    let {timePeriod} = useParams()
+    const params = useParams();
+    const {user, timePeriod: urlTimePeriod, urlDataSource} = params;
 
     // API info state
     const [userInfo, setUserInfo] = useState();
     const [scrobblingData, setScrobblingData] = useState();
-    const [currentInputUsername, setCurrentInputUsername] = useState(useParams().user)
-    const [username, setUsername] = useState(useParams().user)
+    const [currentInputUsername, setCurrentInputUsername] = useState(user)
+    const [timePeriod, setTimePeriod] = useState(urlTimePeriod)
+    const [username, setUsername] = useState(user)
     const [loadingText, setLoadingText] = useState('')
-    const [startDate, setStartDate] = useState(Math.floor((getStartDateFromTimePeriod(timePeriod)/1000)))
+    const [startDate, setStartDate] = useState(urlTimePeriod === 'overall' ? null : Math.floor((getStartDateFromTimePeriod(urlTimePeriod)/1000)))
 
     // Chart visualisation state
     const [dataPresentationMode, setDataPresentationMode] = useState('cumulativeScrobbleData');
@@ -111,150 +112,183 @@ function ChartPage() {
 
     // Chart management state
     const [activeItems, setActiveItems] = useState([0, 1, 2, 3, 4]);
-    const [dataSource, setDataSource] = useState(useParams().urlDataSource)
+    const [dataSource, setDataSource] = useState(urlDataSource)
     const [chartHasLoaded, setChartHasLoaded] = useState(false)
     const [chartOptions, setChartOptions] = useState({
-            chart: {
-                type: chartType,
-                backgroundColor: '#1a202c',
-            },
-            navigator: {
-                enabled: JSON.parse(localStorage.getItem('navigatorEnabled')) === true,
-                outlineColor: '#3f444e'
-            },
-            scrollbar: {
-                enabled: JSON.parse(localStorage.getItem('navigatorEnabled')) === true,
-                barBackgroundColor: '#2c323d',
-                trackBackgroundColor: '#171923',
-                trackBorderColor: '#171923',
-                height: 5
-            },
-            plotOptions: {
-                series: {
-                    stacking: stackingType,
-                },
-                line: {
-                    marker: {
-                        enabled: false
-                    }
-                },
-                column: {
-                    borderWidth: 0
-                },
-                spline: {
-                    marker: {
-                        enabled: false
-                    }
-                },
-                area: {
-                    marker: {
-                        enabled: false
-                    }
-                }
-            },
-            rangeSelector: {
-                buttonTheme: {
-                    fill: '#2c323d',
-                    r: 5,
-                    width: 30,
-                    style: {
-                        color: 'white',
-                        fontWeight: 'bold',
-                    },
-                    states: {
-                        hover: {
-                            fill: '#3f444e',
-                            style: {
-                                color: 'white'
-                            }
-                        },
-                        select: {
-                            fill: '#90cdf4',
-                            style: {
-                                color: '#171923'
-                            }
-                        }
-                    }
-                },
-                labelStyle: {
-                    color: '#b1b1b1',
-                    fontWeight: 'bold'
-                },
-                inputStyle: {
-                    color: '#b1b1b1'
-                }
-            },
-            legend: {
-                enabled: JSON.parse(localStorage.getItem('legendEnabled')) === true || localStorage.getItem('legendEnabled') === null,
-                itemStyle: {'color':'#eeefef'},
-                itemHoverStyle: {
-                    color: '#b1b1b1'
-                }
-            },
-            title: {
-                text: ''
-            },
-            tooltip: {
-                shared: true,
-                split: false,
-                followPointer: true,
-                backgroundColor: '#171923',
-                style: {
-                    color: 'white',
-                    fontWeight: 'normal'
-                },
-                animation: 0,
-                useHTML: true,
-                formatter() {
-                    const chart = this;
-
-                    return `<span style="font-size: 18px">${(new Date(chart.x)).toDateString()}</span><hr style="margin-top: 5px; margin-bottom: 5px;"/>${chart.points
-                        .sort((pointA, pointB) => pointB.y - pointA.y)
-                        .map((point) => {
-                            return `<div style="text-align: center">
-                                        <span style="color: ${point.color}; font-size: 16px"> ${truncateText(point.series.name)}: <strong>${point.y.toLocaleString()}</strong></span>
-                                    </div>`;
-                        })
-                        .join("\n")}`;
-                },
+        chart: {
+            type: chartType,
+            backgroundColor: '#1a202c',
+        },
+        navigator: {
+            enabled: JSON.parse(localStorage.getItem('navigatorEnabled')) === true,
+            outlineColor: '#3f444e',
+            series: {
+                color: '#90cdf4',
+                lineColor: '#90cdf4'
             },
             xAxis: {
+                gridLineColor: '#3f444e',
                 labels: {
                     style: {
-                        color: "#b1b1b1"
+                        color: '#b1b1b1'
                     }
                 }
             },
-            yAxis: {
-                opposite: false,
-                gridLineColor: '#2c323d',
-                labels: {
-                    style: {
-                        color: "#b1b1b1"
-                    }
-                },
-                title: ""
+            handles: {
+                backgroundColor: '#3f444e',
+                borderColor: '#90cdf4'
+            }
+        },
+        scrollbar: {
+            enabled: JSON.parse(localStorage.getItem('navigatorEnabled')) === true,
+            barBackgroundColor: '#2c323d',
+            trackBackgroundColor: '#171923',
+            trackBorderColor: '#171923',
+            buttonBackgroundColor: '#2c323d',
+            buttonBorderColor: '#3f444e',
+            buttonArrowColor: '#b1b1b1',
+            rifleColor: '#b1b1b1',
+            height: 5
+        },
+        plotOptions: {
+            series: {
+                stacking: stackingType,
             },
-            series: {}
-        });
+            line: {
+                marker: {
+                    enabled: false
+                }
+            },
+            column: {
+                borderWidth: 0
+            },
+            spline: {
+                marker: {
+                    enabled: false
+                }
+            },
+            area: {
+                marker: {
+                    enabled: false
+                }
+            }
+        },
+        rangeSelector: {
+            buttonTheme: {
+                fill: '#2c323d',
+                r: 5,
+                width: 30,
+                style: {
+                    color: 'white',
+                    fontWeight: 'bold',
+                },
+                states: {
+                    hover: {
+                        fill: '#3f444e',
+                        style: {
+                            color: 'white'
+                        }
+                    },
+                    select: {
+                        fill: '#90cdf4',
+                        style: {
+                            color: '#171923'
+                        }
+                    }
+                }
+            },
+            labelStyle: {
+                color: '#b1b1b1',
+                fontWeight: 'bold'
+            },
+            inputStyle: {
+                color: '#b1b1b1'
+            }
+        },
+        legend: {
+            enabled: JSON.parse(localStorage.getItem('legendEnabled')) === true || localStorage.getItem('legendEnabled') === null,
+            itemStyle: {'color':'#eeefef'},
+            itemHoverStyle: {
+                color: '#b1b1b1'
+            }
+        },
+        title: {
+            text: ''
+        },
+        tooltip: {
+            shared: true,
+            split: false,
+            followPointer: true,
+            backgroundColor: '#171923',
+            style: {
+                color: 'white',
+                fontWeight: 'normal'
+            },
+            animation: 0,
+            useHTML: true,
+            formatter() {
+                const chart = this;
+
+                return `<span style="font-size: 18px">${(new Date(chart.x)).toDateString()}</span><hr style="margin-top: 5px; margin-bottom: 5px;"/>${chart.points
+                    .sort((pointA, pointB) => pointB.y - pointA.y)
+                    .map((point) => {
+                        return `<div style="text-align: center">
+                                        <span style="color: ${point.color}; font-size: 16px"> ${truncateText(point.series.name)}: <strong>${point.y.toLocaleString()}</strong></span>
+                                    </div>`;
+                    })
+                    .join("\n")}`;
+            },
+        },
+        xAxis: {
+            labels: {
+                style: {
+                    color: "#b1b1b1"
+                }
+            }
+        },
+        yAxis: {
+            opposite: false,
+            gridLineColor: '#2c323d',
+            labels: {
+                style: {
+                    color: "#b1b1b1"
+                }
+            },
+            title: ""
+        },
+        series: {}
+    });
 
     // Get user info on initial page load / when user changes
     useEffect(() => {
-        if (localStorage.getItem('legendEnabled') === null) localStorage.setItem("legendEnabled", true)
+        if (!username) return;
+
+        if (localStorage.getItem('legendEnabled') === null) {
+            localStorage.setItem("legendEnabled", "true")
+        }
 
         getUserInfo(username).then(response => {
-            if (timePeriod === 'overall') setStartDate(response.registered['#text'])
             setUserInfo(response)
+            if (timePeriod === 'overall' && response?.registered?.['#text']) {
+                setStartDate(response.registered['#text'])
+            }
+        }).catch(error => {
+            console.error("Error loading user info:", error)
         })
-    }, [username]);
+    }, [username, timePeriod]);
 
     useEffect(() => {
-        if (userInfo === undefined || startDate === undefined) return;
+        if (!userInfo || !startDate || !timePeriod) return;
 
-        setLoadingText(`loading ${user}'s ${dataSource} chart`);
+        // Additional check: ensure startDate is a valid number and not 0
+        if (typeof startDate !== 'number' || startDate <= 0) return;
+
+        setLoadingText(`loading ${username}'s ${dataSource} chart`);
         setChartHasLoaded(false);
+        setActiveItems([0, 1, 2, 3, 4]); // Reset active items
 
-        if (timePeriod === 'overall') setStartDate(userInfo.registered['#text'])
+        // Clear existing data to prevent old chart from showing
+        setScrobblingData(undefined);
 
         const timePeriodToScrobblePeriod = {
             "overall" : 150,
@@ -264,25 +298,54 @@ function ChartPage() {
             "lastmonth" : 30,
         }
 
-        const userRegistrationUnixTime = startDate;
-        const numberOfScrobblePeriods = timePeriodToScrobblePeriod[timePeriod];
-        const scrobblingPeriods = generateScrobblingPeriods(userRegistrationUnixTime, numberOfScrobblePeriods);
+        const numberOfScrobblePeriods = timePeriodToScrobblePeriod[timePeriod] || 150;
+        const scrobblingPeriods = generateScrobblingPeriods(startDate, numberOfScrobblePeriods);
 
-        setChartOptions({
-            ...chartOptions,
-            plotOptions: {
-                series: {
-                    pointStart: startDate * 1000,
-                    pointInterval: (Date.now() - (startDate * 1000)) / numberOfScrobblePeriods,
-                }
-            },
-        });
+        // Check if we got valid periods
+        if (scrobblingPeriods.length === 0) {
+            setLoadingText("Invalid date range");
+            return;
+        }
+
+        // Calculate the actual time interval based on generated periods
+        const actualStartTime = scrobblingPeriods[0].fromUnix * 1000;
+        const actualEndTime = scrobblingPeriods[scrobblingPeriods.length - 1].toUnix * 1000;
+        const actualInterval = (actualEndTime - actualStartTime) / numberOfScrobblePeriods;
 
         getScrobblingDataForAllPeriods(username, scrobblingPeriods, dataSource)
             .then(response => {
-                setScrobblingData(createScrobblingDataObjects(response));
+                const newData = createScrobblingDataObjects(response);
+
+                setChartOptions(prevOptions => ({
+                    ...prevOptions,
+                    plotOptions: {
+                        ...prevOptions.plotOptions,
+                        series: {
+                            ...prevOptions.plotOptions?.series,
+                            pointStart: actualStartTime,
+                            pointInterval: actualInterval,
+                        }
+                    },
+                    rangeSelector: {
+                        ...prevOptions.rangeSelector,
+                        selected: undefined  // Reset range selector to show all data
+                    },
+                    xAxis: {
+                        ...prevOptions.xAxis,
+                        range: undefined,  // Clear any previous range
+                        min: undefined,
+                        max: undefined
+                    }
+                }));
+
+                // Set data after chart options are updated
+                setScrobblingData(newData);
+            })
+            .catch(error => {
+                console.error("Error loading scrobbling data:", error);
+                setLoadingText("Error loading data");
             });
-    }, [userInfo, dataSource, startDate]);
+    }, [userInfo, dataSource, startDate, timePeriod, username]);
 
     const createScrobblingDataObjects = (scrobblingData) => {
         let listOfItemNames = new Set();
@@ -320,28 +383,41 @@ function ChartPage() {
 
             formattedScrobblingData.push(item);
         });
+
+        // Sort the data by total scrobbles BEFORE returning
+        formattedScrobblingData.sort((a, b) => b.totalScrobbles - a.totalScrobbles);
+
         return formattedScrobblingData;
     };
 
     const generateScrobblingPeriods = (userRegistrationUnixTime, numberOfScrobblePeriods) => {
-        const currentUnixSeconds = Date.now() / 1000;
+        const currentUnixSeconds = Math.floor(Date.now() / 1000);
 
-        const periodLengthSeconds = Math.floor((currentUnixSeconds - startDate) / numberOfScrobblePeriods ); //Max limit of scrobbling periods to prevent API overload
-        // const periodLengthSeconds = Math.floor((currentUnixSeconds - userRegistrationUnixTime)/numberOfScrobblePeriods); //Max limit of scrobbling periods to prevent API overload
+        // Ensure startDate is not in the future
+        const validStartDate = Math.min(startDate, currentUnixSeconds);
+
+        const periodLengthSeconds = Math.floor((currentUnixSeconds - validStartDate) / numberOfScrobblePeriods);
+
+        // Ensure we have a valid period length (at least 1 day)
+        if (periodLengthSeconds < 86400) {
+            console.error("Period length too small, using 1 day minimum");
+            return [];
+        }
 
         let scrobblingPeriods = [];
-        
+
         // Generate "from" and "to" unix timestamps for api requests
-        for (let scrobblingPeriod = startDate; scrobblingPeriod < currentUnixSeconds; scrobblingPeriod += periodLengthSeconds) {
+        for (let scrobblingPeriod = validStartDate; scrobblingPeriod < currentUnixSeconds; scrobblingPeriod += periodLengthSeconds) {
 
             let periodStartUnix = scrobblingPeriod;
-            let periodEndUnix = scrobblingPeriod + periodLengthSeconds;
+            let periodEndUnix = Math.min(scrobblingPeriod + periodLengthSeconds, currentUnixSeconds);
 
             scrobblingPeriods.push({
                 fromUnix: periodStartUnix,
                 toUnix: periodEndUnix,
                 fromDate: new Date(periodStartUnix * 1000).toUTCString(),
-                toDate: new Date(periodEndUnix * 1000).toUTCString()});
+                toDate: new Date(periodEndUnix * 1000).toUTCString()
+            });
         }
         return scrobblingPeriods;
     }
@@ -379,8 +455,6 @@ function ChartPage() {
             )
         })
 
-        setChartHasLoaded(true)
-
         return seriesData
     }
 
@@ -388,15 +462,20 @@ function ChartPage() {
     useEffect(() => {
         if (scrobblingData === undefined) return;
 
-        setChartOptions({
+        setChartOptions((prevOptions) => ({
+            ...prevOptions,
             series: generateSeriesData()
-        })
+        }))
+
+        // Set chartHasLoaded after a brief delay to ensure chart is rendered
+        setTimeout(() => setChartHasLoaded(true), 100);
 
     }, [scrobblingData]);
 
     // Used to regenerate series data when chart settings changes
     useEffect(() => {
-        scrobblingData &&
+        if (!scrobblingData) return;
+
         setChartOptions((prevOptions) => ({
             ...prevOptions,
             series: generateSeriesData(),
@@ -407,9 +486,16 @@ function ChartPage() {
             plotOptions: {
                 ...prevOptions.plotOptions,
                 series: {
-                    ...prevOptions.series,
+                    ...prevOptions.plotOptions.series,
                     stacking: stackingType !== "overlap" ? stackingType : undefined
                 }
+            },
+            // Preserve navigator styling
+            navigator: {
+                ...prevOptions.navigator
+            },
+            scrollbar: {
+                ...prevOptions.scrollbar
             }
         }))
     },[dataPresentationMode, chartType, activeItems, smoothStrength, alignedToFirstScrobble, stackingType])
@@ -462,6 +548,7 @@ function ChartPage() {
                         setDataSource={setDataSource}
                         hasLoaded={chartHasLoaded}
                         setStartDate={setStartDate}
+                        setTimePeriod={setTimePeriod}
                         setUsername={setUsername}
                         currentInputUsername={currentInputUsername}
                         setCurrentInputUsername={setCurrentInputUsername}
@@ -516,20 +603,20 @@ function ChartPage() {
                                             ml={2}
                                             defaultChecked={JSON.parse(localStorage.getItem('navigatorEnabled')) === true}
                                             onChange={(e) =>
-                                                {
-                                                    setChartOptions((prevOptions) => ({
-                                                        ...prevOptions,
-                                                        navigator: {
-                                                            ...(prevOptions.navigator),
-                                                            enabled: e.target.checked
-                                                        },
-                                                        scrollbar: {
-                                                            ...(prevOptions.navigator),
-                                                            enabled: e.target.checked
-                                                        }
-                                                    }))
-                                                    saveToLocalStorage({name: 'navigatorEnabled', value: e.target.checked})
-                                                }
+                                            {
+                                                setChartOptions((prevOptions) => ({
+                                                    ...prevOptions,
+                                                    navigator: {
+                                                        ...prevOptions.navigator,
+                                                        enabled: e.target.checked
+                                                    },
+                                                    scrollbar: {
+                                                        ...prevOptions.scrollbar,
+                                                        enabled: e.target.checked
+                                                    }
+                                                }))
+                                                saveToLocalStorage({name: 'navigatorEnabled', value: e.target.checked})
+                                            }
                                             }
                                         />
                                     </Flex>
@@ -539,16 +626,16 @@ function ChartPage() {
                                             defaultChecked={JSON.parse(localStorage.getItem('legendEnabled')) === true || localStorage.getItem('legendEnabled') === null}
                                             ml={2}
                                             onChange={(e) =>
-                                                {
-                                                    setChartOptions((prevOptions) => ({
-                                                        ...prevOptions,
-                                                        legend: {
-                                                            ...(prevOptions.legend || {}),
-                                                            enabled: e.target.checked
-                                                        },
-                                                    }))
-                                                    saveToLocalStorage({name: 'legendEnabled', value: e.target.checked})
-                                                }
+                                            {
+                                                setChartOptions((prevOptions) => ({
+                                                    ...prevOptions,
+                                                    legend: {
+                                                        ...(prevOptions.legend || {}),
+                                                        enabled: e.target.checked
+                                                    },
+                                                }))
+                                                saveToLocalStorage({name: 'legendEnabled', value: e.target.checked})
+                                            }
                                             }
                                         />
                                     </Flex>
@@ -556,71 +643,83 @@ function ChartPage() {
                             </Box>
                         </Box>
                         <CustomDivider text={'Series Entries'}/>
-                        <AutoComplete openOnFocus listAllValuesOnFocus={true} maxSuggestions={50} onChange={(val) => addToActiveItems(val)}>
-                            <AutoCompleteInput placeholder={`Search for ${dataSource}...`} variant={'outline'}/>
-                            {
-                                scrobblingData &&
-                                <AutoCompleteList m={0} p={0}>
-                                    {
-                                        sortArrayByTotalScrobbles(scrobblingData).map((item, index) => {
-                                            // Check if the current index is in the activeItems array
-                                            const isDisabled = activeItems.includes(index);
-                                            return (
-                                                <AutoCompleteItem
-                                                    key={`item${index}`}
-                                                    value={item.name}
-                                                    whiteSpace={'nowrap'}
-                                                    p={1}
-                                                    pl={3}
-                                                    m={0}
-                                                    disabled={isDisabled}
-                                                >
-                                                    <span>
-                                                        {
-                                                            dataSource === 'artist' ?
-                                                                <span>
-                                                                    {truncateText(item.name, 40)} · <span style={{fontWeight: 'bold'}}>{item.totalScrobbles.toLocaleString()}</span>
-                                                                </span>
-                                                                :
-                                                                <span>
-                                                                    {truncateText(item.name, 40)} · <span style={{fontWeight: 'bold'}}>{item.totalScrobbles.toLocaleString()}</span>
-                                                                    <br/>
-                                                                    <span style={{color: '#7285A5'}}>
-                                                                        {truncateText(item.artist, 40)}
-                                                                    </span>
-                                                                </span>
-                                                        }
-                                                    </span>
+                        {scrobblingData && chartHasLoaded ? (
+                            <>
+                                <AutoComplete openOnFocus listAllValuesOnFocus={true} maxSuggestions={50} onChange={(val) => addToActiveItems(val)}>
+                                    <AutoCompleteInput placeholder={`Search for ${dataSource}...`} variant={'outline'}/>
+                                    <AutoCompleteList m={0} p={0}>
+                                        {
+                                            sortArrayByTotalScrobbles(scrobblingData).map((item, index) => {
+                                                // Check if the current index is in the activeItems array
+                                                const isDisabled = activeItems.includes(index);
+                                                const itemName = item?.name || 'Unknown';
+                                                const artistName = item?.artist || 'Unknown Artist';
+                                                const totalScrobbles = item?.totalScrobbles || 0;
 
-                                                </AutoCompleteItem>
-                                            );
-                                        })
-                                    }
-                                </AutoCompleteList>
-                            }
-                        </AutoComplete>
-                        <HStack mt={2} mb={2} justifyContent={'space-between'}>
-                            <Button onClick={() => clearSeriesData()} size={'sm'} w={'100%'}>Clear All</Button>
-                            <Button onClick={() => resetSeriesData()} size={'sm'} w={'100%'}>Reset</Button>
-                        </HStack>
+                                                return (
+                                                    <AutoCompleteItem
+                                                        key={`item${index}`}
+                                                        value={itemName}
+                                                        whiteSpace={'nowrap'}
+                                                        p={1}
+                                                        pl={3}
+                                                        m={0}
+                                                        disabled={isDisabled}
+                                                    >
+                                                        <span>
+                                                            {
+                                                                dataSource === 'artist' ?
+                                                                    <span>
+                                                                        {truncateText(itemName, 40)} · <span style={{fontWeight: 'bold'}}>{totalScrobbles.toLocaleString()}</span>
+                                                                    </span>
+                                                                    :
+                                                                    <span>
+                                                                        {truncateText(itemName, 40)} · <span style={{fontWeight: 'bold'}}>{totalScrobbles.toLocaleString()}</span>
+                                                                        <br/>
+                                                                        <span style={{color: '#7285A5'}}>
+                                                                            {truncateText(artistName, 40)}
+                                                                        </span>
+                                                                    </span>
+                                                            }
+                                                        </span>
+
+                                                    </AutoCompleteItem>
+                                                );
+                                            })
+                                        }
+                                    </AutoCompleteList>
+                                </AutoComplete>
+                                <HStack mt={2} mb={2} justifyContent={'space-between'}>
+                                    <Button onClick={() => clearSeriesData()} size={'sm'} w={'100%'}>Clear All</Button>
+                                    <Button onClick={() => resetSeriesData()} size={'sm'} w={'100%'}>Reset</Button>
+                                </HStack>
+                            </>
+                        ) : (
+                            <Box textAlign="center" p={4}>
+                                <Text>Loading data...</Text>
+                            </Box>
+                        )}
                         {
-                            scrobblingData &&
+                            scrobblingData && chartHasLoaded &&
                             <Fade in={true}>
                                 <Box display={'flex'} flexWrap={'wrap'} mt={2} mb={2}>
                                     {
-                                        activeItems.map((item, index) => (
-                                            <Tag
-                                                title={scrobblingData[item].name.length > 17 ? scrobblingData[item].name : ""}
-                                                m={1}
-                                                key={item}
-                                                borderRadius={'full'}
-                                                variant={'solid'}
-                                            >
-                                                <Box borderRadius={'full'} bg={chartSeriesColours[index % chartSeriesColours.length]} w={4} h={4} ml={-1} mr={1}/>
-                                                <TagLabel pb={1} pt={1}>{truncateText(scrobblingData[item].name)}</TagLabel>
-                                                <TagCloseButton onClick={() => removeFromActiveItems(index)}/>
-                                            </Tag>
-                                        ))
+                                        activeItems.map((item, index) => {
+                                            const itemName = scrobblingData[item]?.name || 'Unknown';
+                                            return (
+                                                <Tag
+                                                    title={itemName.length > 17 ? itemName : ""}
+                                                    m={1}
+                                                    key={item}
+                                                    borderRadius={'full'}
+                                                    variant={'solid'}
+                                                >
+                                                    <Box borderRadius={'full'} bg={chartSeriesColours[index % chartSeriesColours.length]} w={4} h={4} ml={-1} mr={1}/>
+                                                    <TagLabel pb={1} pt={1}>{truncateText(itemName)}</TagLabel>
+                                                    <TagCloseButton onClick={() => removeFromActiveItems(index)}/>
+                                                </Tag>
+                                            )
+                                        })
                                     }
                                 </Box>
                             </Fade>
@@ -629,8 +728,13 @@ function ChartPage() {
                 </GridItem>
                 <GridItem colSpan={5} mt={5} mr={5}>
                     {
-                        scrobblingData !== undefined ?
-                            <Fade in={true}>
+                        !chartHasLoaded ?
+                            <HStack w={'100%'} h={'100vh'} justifyContent={'center'} alignItems={'center'} flexDirection={'column'}>
+                                <Text fontSize={'xl'}>{loadingText}</Text>
+                                {!loadingText.includes('Error') && !loadingText.includes('Invalid') && <Spinner size={'xl'} mt={4}/>}
+                            </HStack>
+                            :
+                            <Fade in={chartHasLoaded} transition={{enter: {duration: 0.5}}}>
                                 <HighchartsReact
                                     highcharts={Highcharts}
                                     constructorType={'stockChart'}
@@ -638,11 +742,6 @@ function ChartPage() {
                                     containerProps={{ style: { height: '97vh' } }}
                                 />
                             </Fade>
-                            :
-                            <HStack w={'100%'} h={'100vh'} justifyContent={'center'} alignItems={'center'}>
-                                <Text>{loadingText}</Text>
-                                <Spinner/>
-                            </HStack>
                     }
                 </GridItem>
             </Grid>
