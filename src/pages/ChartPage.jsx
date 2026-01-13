@@ -327,7 +327,10 @@ function ChartPage() {
         getUserInfo(username).then(response => {
             setUserInfo(response)
             if (timePeriod === 'overall' && response?.registered?.['#text']) {
-                setStartDate(response.registered['#text'])
+                const regDate = parseInt(response.registered['#text']);
+                if (!isNaN(regDate)) {
+                    setStartDate(regDate);
+                }
             }
         }).catch(error => {
             console.error("Error loading user info:", error)
@@ -365,10 +368,11 @@ function ChartPage() {
             return;
         }
 
-        // Calculate time interval based on periods
+        // Calculate time interval based on actual generated periods
         const actualStartTime = scrobblingPeriods[0].fromUnix * 1000;
-        const actualEndTime = scrobblingPeriods[scrobblingPeriods.length - 1].toUnix * 1000;
-        const actualInterval = (actualEndTime - actualStartTime) / numberOfScrobblePeriods;
+        const lastPeriod = scrobblingPeriods[scrobblingPeriods.length - 1];
+        const actualEndTime = lastPeriod.toUnix * 1000;
+        const actualInterval = (actualEndTime - actualStartTime) / scrobblingPeriods.length;
 
         getScrobblingDataForAllPeriods(username, scrobblingPeriods, dataSource, (progress) => {
             setLoadProgress(progress);
@@ -431,24 +435,40 @@ function ChartPage() {
         return formattedScrobblingData;
     };
 
-    const generateScrobblingPeriods = (userRegistrationUnixTime, numberOfScrobblePeriods) => {
+    const generateScrobblingPeriods = (searchStartDate, numberOfScrobblePeriods) => {
         const currentUnixSeconds = Math.floor(Date.now() / 1000);
 
-        // Ensure startDate is not in the future
-        const validStartDate = Math.min(startDate, currentUnixSeconds);
+        // Ensure startDate is not in the future and is a valid number
+        let startTimestamp = parseInt(searchStartDate);
+        if (isNaN(startTimestamp) || startTimestamp <= 0) return [];
 
-        const periodLengthSeconds = Math.floor((currentUnixSeconds - validStartDate) / numberOfScrobblePeriods);
+        // Cap start date by account registration date if available
+        const registrationDate = parseInt(userInfo?.registered?.['#text']);
+        if (!isNaN(registrationDate)) {
+            startTimestamp = Math.max(startTimestamp, registrationDate);
+        }
 
-        // Ensure period length is valid (at least 1 day)
-        if (periodLengthSeconds < 86400) {
-            console.error("Period length too small, using 1 day minimum");
-            return [];
+        const validStartDate = Math.min(startTimestamp, currentUnixSeconds - 86400); // At least 1 day ago
+        const ageInSeconds = currentUnixSeconds - validStartDate;
+        const ageInDays = Math.floor(ageInSeconds / 86400);
+
+        let periodLengthSeconds;
+        let actualNumberOfPeriods;
+
+        // If the account is newer than the requested number of periods, use 1 period per day instead
+        if (ageInDays < numberOfScrobblePeriods) {
+            actualNumberOfPeriods = Math.max(ageInDays, 1);
+            periodLengthSeconds = 86400;
+        } else {
+            actualNumberOfPeriods = numberOfScrobblePeriods;
+            periodLengthSeconds = Math.floor(ageInSeconds / numberOfScrobblePeriods);
         }
 
         let scrobblingPeriods = [];
 
         // Generate "from" and "to" unix timestamps for api requests
-        for (let scrobblingPeriod = validStartDate; scrobblingPeriod < currentUnixSeconds; scrobblingPeriod += periodLengthSeconds) {
+        const limit = currentUnixSeconds - (periodLengthSeconds / 2); // Avoid generating a tiny final period
+        for (let scrobblingPeriod = validStartDate; scrobblingPeriod < limit; scrobblingPeriod += periodLengthSeconds) {
 
             let periodStartUnix = scrobblingPeriod;
             let periodEndUnix = Math.min(scrobblingPeriod + periodLengthSeconds, currentUnixSeconds);
