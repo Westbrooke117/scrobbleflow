@@ -9,7 +9,6 @@
 export const calculateForecast = (data, historyLookback, forecastPeriods = 10, isCumulative = true) => {
     if (!data || data.length < 2) return null;
 
-    // Filter out null/undefined values and keep their indices
     const validPoints = data
         .map((y, x) => ({ x, y }))
         .filter(point => point.y !== null && point.y !== undefined);
@@ -26,7 +25,7 @@ export const calculateForecast = (data, historyLookback, forecastPeriods = 10, i
     let sumXX = 0;
 
     for (let i = 0; i < n; i++) {
-        const x = i; // We use relative X for the internal regression
+        const x = i;
         const y = subset[i].y;
         sumX += x;
         sumY += y;
@@ -35,12 +34,11 @@ export const calculateForecast = (data, historyLookback, forecastPeriods = 10, i
     }
 
     const denominator = (n * sumXX - sumX * sumX);
-    if (denominator === 0) return null; // Parallel to Y axis or single point
+    if (denominator === 0) return null;
 
     const slope = (n * sumXY - sumX * sumY) / denominator;
     const intercept = (sumY - slope * sumX) / n;
 
-    // Calculate standard error
     let sumSquaredResiduals = 0;
     for (let i = 0; i < n; i++) {
         const x = i;
@@ -57,19 +55,15 @@ export const calculateForecast = (data, historyLookback, forecastPeriods = 10, i
     const lastRealIndex = data.length - 1;
     const lastRealValue = data[lastRealIndex] !== null ? data[lastRealIndex] : subset[subset.length - 1].y;
 
-    // Add the starting point for the forecast line (connects to the last real data point)
     forecastData.push([lastRealIndex, Math.round(lastRealValue)]);
     marginOfErrorData.push([lastRealIndex, Math.round(lastRealValue), Math.round(lastRealValue)]);
 
     let currentForecastY = lastRealValue;
+    let currentLowY = lastRealValue;
 
-    // The internal regression was performed on relative indices [0...n-1]
-    // The last point of the subset corresponded to relative X = n-1.
-    // So the next point (forecast) starts at relative X = n, n+1, etc.
     for (let i = 1; i <= forecastPeriods; i++) {
         const relativeX = (n - 1) + i;
 
-        // We project from the last real value using the slope
         let predictedY = lastRealValue + (slope * i);
 
         if (isCumulative) {
@@ -79,12 +73,20 @@ export const calculateForecast = (data, historyLookback, forecastPeriods = 10, i
             predictedY = Math.max(0, predictedY);
         }
 
-        // Standard error of the prediction (includes uncertainty of slope and intercept)
         const errorTerm = standardError * Math.sqrt(1 + 1 / n + Math.pow(relativeX - (sumX / n), 2) / denominator);
         const cappedError = isFinite(errorTerm) ? errorTerm : 0;
 
         const finalY = Math.round(predictedY);
-        const low = Math.round(Math.max(0, predictedY - cappedError * 2));
+
+        let lowValue = predictedY - cappedError * 2;
+        if (isCumulative) {
+            lowValue = Math.max(currentLowY, lowValue);
+            currentLowY = lowValue;
+        } else {
+            lowValue = Math.max(0, lowValue);
+        }
+
+        const low = Math.round(lowValue);
         const high = Math.round(predictedY + cappedError * 2);
 
         forecastData.push([lastRealIndex + i, finalY]);
