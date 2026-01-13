@@ -1,27 +1,18 @@
 
-const smoothDataset = ([...dataset], smoothStrength) => {
-    let smoothedData = []
+const smoothDataset = (dataset, smoothStrength) => {
+    if (smoothStrength <= 0) return dataset;
 
-    for (let i = smoothStrength; i < dataset.length - smoothStrength; i++){
-        switch (smoothStrength){
-            case 1:
-                smoothedData.push(
-                    Math.round((dataset[i-1] + dataset[i] + dataset[i+1])/3)
-                )
-                break;
-            case 2:
-                smoothedData.push(
-                    Math.round((dataset[i-2] + dataset[i-1] + dataset[i] + dataset[i+1] + dataset[i+2])/5)
-                )
-                break;
-            case 3:
-                smoothedData.push(
-                    Math.round((dataset[i-3] + dataset[i-2] + dataset[i-1] + dataset[i] + dataset[i+1] + dataset[i+2] + dataset[i+3])/7)
-                )
-                break;
-        }
+    const windowSize = 2 * smoothStrength + 1;
+    let smoothedData = [];
+
+    for (let i = smoothStrength; i < dataset.length - smoothStrength; i++) {
+        const sum = dataset
+            .slice(i - smoothStrength, i + smoothStrength + 1)
+            .reduce((acc, val) => acc + val, 0);
+
+        smoothedData.push(Math.round(sum / windowSize));
     }
-    return smoothedData
+    return smoothedData;
 }
 
 // Shown as label above smooth strength slider
@@ -45,7 +36,7 @@ const calculateAlignedDataset = ([...dataset]) => {
 
     alignedDataset.push(0)
     for (let i = 0; i < dataset.length; i++) {
-        if (dataset[i] !== 0){
+        if (dataset[i] !== 0) {
             alignedDataset.push(dataset[i])
         }
     }
@@ -53,4 +44,6 @@ const calculateAlignedDataset = ([...dataset]) => {
     return alignedDataset
 }
 
-export {smoothDataset, getSmoothStrengthLabel, sortArrayByTotalScrobbles, calculateAlignedDataset}
+const chartSeriesColours = ["#2caffe", "#544fc5", "#00e272", "#fe6a35", "#6b8abc", "#d568fb", "#2ee0ca", "#fa4b42", "#feb56a", "#91e8e1"];
+
+export { smoothDataset, getSmoothStrengthLabel, sortArrayByTotalScrobbles, calculateAlignedDataset, chartSeriesColours }

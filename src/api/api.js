@@ -11,30 +11,34 @@ const getUserInfo = async (username) => {
     return responseData;
 }
 
-const getScrobblingDataForAllPeriods = async (username, scrobblingPeriods, category) => {
-    let scrobblingData = [];
+const getScrobblingDataForAllPeriods = async (username, scrobblingPeriods, category, onProgress) => {
+    let completedRequests = 0;
+    const totalRequests = scrobblingPeriods.length;
 
-    //Generate array of API requests
-    let scrobblingPeriodRequests = [];
+    // Helper to send request and track progress
+    const fetchPeriod = async (scrobblingPeriod) => {
+        try {
+            const url = `https://ws.audioscrobbler.com/2.0/?method=user.getweekly${category}chart&user=${username}&api_key=82d112e473f59ade0157abe4a47d4eb5&format=json&from=${scrobblingPeriod.fromUnix}&to=${scrobblingPeriod.toUnix}`;
+            const response = await axios.get(url);
+            const data = response.data[`weekly${category}chart`][category];
 
-    scrobblingPeriods.map(scrobblingPeriod => {
-        scrobblingPeriodRequests.push(`https://ws.audioscrobbler.com/2.0/?method=user.getweekly${category}chart&user=${username}&api_key=82d112e473f59ade0157abe4a47d4eb5&format=json&from=${scrobblingPeriod.fromUnix}&to=${scrobblingPeriod.toUnix}`);
-    })
+            // Return data if it exists, otherwise returning empty array to maintain alignment
+            return (data && data.length > 0) ? data : [];
+        } catch (error) {
+            console.error(`Error fetching period: ${error}`);
+            return []; // Return empty array on error to maintain alignment
+        } finally {
+            completedRequests++;
+            if (onProgress) {
+                onProgress(Math.round((completedRequests / totalRequests) * 100));
+            }
+        }
+    };
 
-    // Send all API requests
-    // Note: Sometimes this overloads the API
-    await axios.all(scrobblingPeriodRequests.map(period => axios.get(period)))
-        .catch(error => alert(`Error! Please try again in a few seconds\nError log: ${error}`))
-        .then(axios.spread((...response) => {
-            response.forEach(period => {
-                const data = period.data[`weekly${category}chart`][category];
-                if (data && data.length > 0) {
-                    scrobblingData.push(data);
-                }
-            });
-        }));
+    // Execute all requests
+    const scrobblingData = await Promise.all(scrobblingPeriods.map(period => fetchPeriod(period)));
 
     return scrobblingData;
 }
 
-export {getUserInfo, getScrobblingDataForAllPeriods};
+export { getUserInfo, getScrobblingDataForAllPeriods };
