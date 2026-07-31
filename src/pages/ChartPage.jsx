@@ -335,13 +335,15 @@ function ChartPage() {
         }).catch(error => {
             console.error("Error loading user info:", error)
         })
-    }, [username, timePeriod]);
+    }, [username]);
 
     useEffect(() => {
         if (!userInfo || !startDate || !timePeriod) return;
 
         // Ensure startDate is a valid number and not 0
         if (typeof startDate !== 'number' || startDate <= 0) return;
+
+        let isCancelled = false;
 
         setLoadingText(`loading ${username}'s ${dataSource} chart`);
         setChartHasLoaded(false);
@@ -375,9 +377,12 @@ function ChartPage() {
         const actualInterval = (actualEndTime - actualStartTime) / scrobblingPeriods.length;
 
         getScrobblingDataForAllPeriods(username, scrobblingPeriods, dataSource, (progress) => {
-            setLoadProgress(progress);
+            if (!isCancelled) {
+                setLoadProgress(progress);
+            }
         })
             .then(response => {
+                if (isCancelled) return;
                 const newData = createScrobblingDataObjects(response);
 
                 setPointStart(actualStartTime);
@@ -385,9 +390,14 @@ function ChartPage() {
                 setScrobblingData(newData);
             })
             .catch(error => {
+                if (isCancelled) return;
                 console.error("Error loading scrobbling data:", error);
                 setLoadingText("Error loading data");
             });
+
+        return () => {
+            isCancelled = true;
+        };
     }, [userInfo, dataSource, startDate, timePeriod, username]);
 
     const createScrobblingDataObjects = (scrobblingData) => {
@@ -488,7 +498,8 @@ function ChartPage() {
     useEffect(() => {
         if (scrobblingData === undefined) return;
         // Set chartHasLoaded after a brief delay to ensure chart is rendered
-        setTimeout(() => setChartHasLoaded(true), 100);
+        const timer = setTimeout(() => setChartHasLoaded(true), 100);
+        return () => clearTimeout(timer);
     }, [scrobblingData]);
 
 

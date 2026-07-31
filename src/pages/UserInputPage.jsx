@@ -31,7 +31,12 @@ const UserInputPage = () => {
             <Container justifyContent={'center'} display={'flex'} width={"100vw"} height={"100vh"} gap={5}>
                 <VStack justifyContent={'space-between'}>
                     <Box></Box>
-                    <Box>
+                    <Box as="form" onSubmit={(e) => {
+                        e.preventDefault();
+                        if (inputUsername.trim().length > 0) {
+                            handleClick(inputUsername.trim());
+                        }
+                    }}>
                         <HStack alignItems={'center'} mb={5} ml={-4}>
                             <Image src={'assets/icon.svg'} maxH={65} borderRadius={10}/>
                             <Box>
@@ -41,7 +46,23 @@ const UserInputPage = () => {
                         </HStack>
                         <HStack whiteSpace={'nowrap'}>
                             <Text fontSize={24}>last.fm/user/</Text>
-                            <Input mt={0.5} color={'#90cdf4'} ml={-1.5} placeholder={'last.fm username...'} fontSize={24} minW={'fit-content'} type={'text'} variant={'flushed'} onChange={(e) => {setInputUsername(e.target.value)}}/>
+                            <Input
+                                mt={0.5}
+                                color={'#90cdf4'}
+                                ml={-1.5}
+                                placeholder={'last.fm username...'}
+                                fontSize={24}
+                                minW={'fit-content'}
+                                type={'text'}
+                                variant={'flushed'}
+                                value={inputUsername}
+                                onChange={(e) => {setInputUsername(e.target.value)}}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && inputUsername.trim().length > 0) {
+                                        handleClick(inputUsername.trim());
+                                    }
+                                }}
+                            />
                         </HStack>
                         <HStack mt={3}>
                             <Select variant={'filled'} onChange={(e) => setDataSourceOption(e.target.value)}>
@@ -57,10 +78,11 @@ const UserInputPage = () => {
                                 <option value='lastmonth'>Last 30 days</option>
                             </Select>
                             <Button
-                                isDisabled={inputUsername.length === 0}
+                                type="submit"
+                                isDisabled={inputUsername.trim().length === 0}
                                 variant={'outline'}
                                 minW={'fit-content'}
-                                onClick={() => handleClick(inputUsername)}
+                                onClick={() => handleClick(inputUsername.trim())}
                             >View Charts</Button>
                         </HStack>
                     </Box>
