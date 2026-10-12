@@ -18,7 +18,12 @@ import {
 } from "@chakra-ui/react";
 import { useParams } from "react-router-dom";
 import { CustomDivider } from "../components/CustomDivider.jsx";
-import { getStartDateFromTimePeriod, truncateText } from "../utils/helperFunctions.js";
+import {
+    formatElapsedAxisLabel,
+    formatTimeSinceFirstScrobble,
+    getStartDateFromTimePeriod,
+    truncateText
+} from "../utils/helperFunctions.js";
 import { HeaderBar } from "../components/HeaderBar.jsx";
 import { UserInfoAccordion } from "../components/UserInfoAccordion.jsx";
 import {
@@ -142,20 +147,6 @@ const baseChartOptions = {
         },
         animation: 0,
         useHTML: true,
-        formatter() {
-            const chart = this;
-
-            return `<span style="font-size: 18px">${(new Date(chart.x)).toDateString()}</span><hr style="margin-top: 5px; margin-bottom: 5px;"/>${chart.points
-                .filter(point => point.series.type !== 'arearange')
-                .sort((pointA, pointB) => (pointB.y || 0) - (pointA.y || 0))
-                .map((point) => {
-                    const val = Math.round(Number(point.y) || 0).toLocaleString();
-                    return `<div style="text-align: center">
-                                    <span style="color: ${point.color}; font-size: 16px"> ${truncateText(point.series.name)}: <strong>${val}</strong></span>
-                                </div>`;
-                })
-                .join("\n")}`;
-        },
     },
     xAxis: {
         labels: {
@@ -175,6 +166,38 @@ const baseChartOptions = {
         title: ""
     }
 };
+
+// Tooltip listing each series' value at the hovered point, under the given header
+const buildTooltip = (header, points) => {
+    return `<span style="font-size: 18px">${header}</span><hr style="margin-top: 5px; margin-bottom: 5px;"/>${points
+        .filter(point => point.series.type !== 'arearange')
+        .sort((pointA, pointB) => (pointB.y || 0) - (pointA.y || 0))
+        .map((point) => {
+            const val = Math.round(Number(point.y) || 0).toLocaleString();
+            return `<div style="text-align: center">
+                            <span style="color: ${point.color}; font-size: 16px"> ${truncateText(point.series.name)}: <strong>${val}</strong></span>
+                        </div>`;
+        })
+        .join("\n")}`;
+};
+
+function dateTooltipFormatter() {
+    return buildTooltip((new Date(this.x)).toDateString(), this.points);
+}
+
+// When aligned to first scrobble, x values are milliseconds elapsed since the first scrobble
+function elapsedTooltipFormatter() {
+    const header = this.x === 0 ? 'First scrobble' : `${formatTimeSinceFirstScrobble(this.x)} since first scrobble`;
+    return buildTooltip(header, this.points);
+}
+
+function dateAxisLabelFormatter() {
+    return this.axis.defaultLabelFormatter.call(this);
+}
+
+function elapsedAxisLabelFormatter() {
+    return formatElapsedAxisLabel(this.value, this.axis.max - this.axis.min);
+}
 
 function ChartPage() {
     // URL parameters
@@ -248,6 +271,7 @@ function ChartPage() {
             }];
 
             if (forecastingEnabled && pointStart && pointInterval) {
+                const seriesPointStart = alignedToFirstScrobble ? 0 : pointStart;
                 const isCumulative = dataPresentationMode === 'cumulativeScrobbleData';
                 try {
                     const forecastData = calculateForecast(data, forecastHistory, forecastLength, isCumulative);
@@ -255,7 +279,7 @@ function ChartPage() {
                         series.push({
                             id: `${seriesId}-forecast`,
                             name: `${scrobbleItem.name} (Forecast)`,
-                            data: forecastData.forecastData.map(([idx, val]) => [pointStart + idx * pointInterval, val]),
+                            data: forecastData.forecastData.map(([idx, val]) => [seriesPointStart + idx * pointInterval, val]),
                             color: color,
                             dashStyle: 'dot',
                             zIndex: 2,
@@ -268,7 +292,7 @@ function ChartPage() {
                                 id: `${seriesId}-error`,
                                 name: `${scrobbleItem.name} (Error Margin)`,
                                 type: 'arearange',
-                                data: forecastData.marginOfErrorData.map(([idx, low, high]) => [pointStart + idx * pointInterval, low, high]),
+                                data: forecastData.marginOfErrorData.map(([idx, low, high]) => [seriesPointStart + idx * pointInterval, low, high]),
                                 color: color,
                                 fillOpacity: 0.15,
                                 lineWidth: 0,
@@ -295,7 +319,30 @@ function ChartPage() {
         },
         navigator: {
             ...baseChartOptions.navigator,
-            enabled: navigatorEnabled
+            enabled: navigatorEnabled,
+            xAxis: {
+                ...baseChartOptions.navigator.xAxis,
+                labels: {
+                    ...baseChartOptions.navigator.xAxis.labels,
+                    formatter: alignedToFirstScrobble ? elapsedAxisLabelFormatter : dateAxisLabelFormatter
+                }
+            }
+        },
+        // Date-based range buttons and inputs don't apply to time since first scrobble
+        rangeSelector: {
+            ...baseChartOptions.rangeSelector,
+            enabled: !alignedToFirstScrobble
+        },
+        xAxis: {
+            ...baseChartOptions.xAxis,
+            labels: {
+                ...baseChartOptions.xAxis.labels,
+                formatter: alignedToFirstScrobble ? elapsedAxisLabelFormatter : dateAxisLabelFormatter
+            }
+        },
+        tooltip: {
+            ...baseChartOptions.tooltip,
+            formatter: alignedToFirstScrobble ? elapsedTooltipFormatter : dateTooltipFormatter
         },
         scrollbar: {
             ...baseChartOptions.scrollbar,
@@ -309,12 +356,12 @@ function ChartPage() {
             ...baseChartOptions.plotOptions,
             series: {
                 stacking: stackingType !== "overlap" ? stackingType : undefined,
-                pointStart: pointStart,
+                pointStart: alignedToFirstScrobble ? 0 : pointStart,
                 pointInterval: pointInterval
             }
         },
         series: seriesData
-    }), [seriesData, chartType, navigatorEnabled, legendEnabled, stackingType, pointStart, pointInterval]);
+    }), [seriesData, chartType, navigatorEnabled, legendEnabled, stackingType, pointStart, pointInterval, alignedToFirstScrobble]);
 
     // Get user info on initial page load / when user changes
     useEffect(() => {
@@ -625,7 +672,10 @@ function ChartPage() {
                             </HStack>
                             :
                             <Fade in={chartHasLoaded} transition={{ enter: { duration: 0.5 } }}>
+                                {/* Remount when switching between dates and time since first scrobble so the
+                                    zoom range from one x-axis scale isn't carried over to the other */}
                                 <HighchartsReact
+                                    key={alignedToFirstScrobble ? 'time-since-first-scrobble' : 'dates'}
                                     highcharts={Highcharts}
                                     constructorType={'stockChart'}
                                     options={chartOptions}

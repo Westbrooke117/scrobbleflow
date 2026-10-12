@@ -38,4 +38,31 @@ const convertTimePeriodToFullDescription = (timePeriodName) => {
     return timePeriodToFullDescription[timePeriodName]
 }
 
-export {truncateText, deepCopy, getStartDateFromTimePeriod, convertTimePeriodToFullDescription}
+const MS_PER_DAY = 86400000;
+const DAYS_PER_MONTH = 30.44;
+const DAYS_PER_YEAR = 365.25;
+
+// Long form for tooltips, e.g. "12 days", "5 months", "2.5 years"
+const formatTimeSinceFirstScrobble = (elapsedMs) => {
+    const days = Math.round(elapsedMs / MS_PER_DAY);
+    if (days < 60) return `${days} ${days === 1 ? 'day' : 'days'}`;
+
+    const months = Math.round(days / DAYS_PER_MONTH);
+    if (months < 24) return `${months} months`;
+
+    return `${Math.round(days / DAYS_PER_YEAR * 10) / 10} years`;
+}
+
+// Short form for axis labels, e.g. "12d", "5mo", "2.5y". The unit is picked from the visible
+// axis span so every label on the axis uses the same unit
+const formatElapsedAxisLabel = (elapsedMs, axisSpanMs) => {
+    const days = elapsedMs / MS_PER_DAY;
+    const spanDays = axisSpanMs / MS_PER_DAY;
+
+    if (elapsedMs === 0) return '0';
+    if (spanDays <= 120) return `${Math.round(days)}d`;
+    if (spanDays <= 3 * DAYS_PER_YEAR) return `${Math.round(days / DAYS_PER_MONTH)}mo`;
+    return `${Math.round(days / DAYS_PER_YEAR * 10) / 10}y`;
+}
+
+export {truncateText, deepCopy, getStartDateFromTimePeriod, convertTimePeriodToFullDescription, formatTimeSinceFirstScrobble, formatElapsedAxisLabel}
