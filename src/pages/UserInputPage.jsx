@@ -57,11 +57,6 @@ const UserInputPage = () => {
                                 variant={'flushed'}
                                 value={inputUsername}
                                 onChange={(e) => {setInputUsername(e.target.value)}}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && inputUsername.trim().length > 0) {
-                                        handleClick(inputUsername.trim());
-                                    }
-                                }}
                             />
                         </HStack>
                         <HStack mt={3}>
@@ -82,7 +77,6 @@ const UserInputPage = () => {
                                 isDisabled={inputUsername.trim().length === 0}
                                 variant={'outline'}
                                 minW={'fit-content'}
-                                onClick={() => handleClick(inputUsername.trim())}
                             >View Charts</Button>
                         </HStack>
                     </Box>

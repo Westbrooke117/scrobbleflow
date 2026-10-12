@@ -1,5 +1,5 @@
 import '../App.css'
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { getScrobblingDataForAllPeriods, getUserInfo } from "../api/api.js";
 import Highcharts from 'highcharts/highstock'
 import HighchartsMore from 'highcharts/highcharts-more'
@@ -18,17 +18,15 @@ import {
 } from "@chakra-ui/react";
 import { useParams } from "react-router-dom";
 import { CustomDivider } from "../components/CustomDivider.jsx";
-import { deepCopy, getStartDateFromTimePeriod, truncateText } from "../utils/helperFunctions.js";
+import { getStartDateFromTimePeriod, truncateText } from "../utils/helperFunctions.js";
 import { HeaderBar } from "../components/HeaderBar.jsx";
 import { UserInfoAccordion } from "../components/UserInfoAccordion.jsx";
 import {
     calculateAlignedDataset,
-    getSmoothStrengthLabel,
     smoothDataset,
-    sortArrayByTotalScrobbles,
     chartSeriesColours
 } from "../utils/chartUtils.js";
-import { getLocalStorageItems, saveToLocalStorage } from "../utils/localStorageManager.js";
+import { saveToLocalStorage } from "../utils/localStorageManager.js";
 import { ScrobbleItem } from "../utils/ScrobbleItem.js";
 
 // Extracted Components
@@ -38,6 +36,145 @@ import { ForecastingOptions } from "../components/ChartPage/ForecastingOptions.j
 import { MiscellaneousOptions } from "../components/ChartPage/MiscellaneousOptions.jsx";
 import { SeriesEntriesSearch } from "../components/ChartPage/SeriesEntriesSearch.jsx";
 
+
+const baseChartOptions = {
+    chart: {
+        backgroundColor: '#1a202c',
+    },
+    navigator: {
+        outlineColor: '#3f444e',
+        series: {
+            color: '#90cdf4',
+            lineColor: '#90cdf4'
+        },
+        xAxis: {
+            gridLineColor: '#3f444e',
+            labels: {
+                style: {
+                    color: '#b1b1b1'
+                }
+            }
+        },
+        handles: {
+            backgroundColor: '#3f444e',
+            borderColor: '#90cdf4'
+        }
+    },
+    scrollbar: {
+        barBackgroundColor: '#2c323d',
+        trackBackgroundColor: '#171923',
+        trackBorderColor: '#171923',
+        buttonBackgroundColor: '#2c323d',
+        buttonBorderColor: '#3f444e',
+        buttonArrowColor: '#b1b1b1',
+        rifleColor: '#b1b1b1',
+        height: 5
+    },
+    plotOptions: {
+        line: {
+            marker: {
+                enabled: false
+            }
+        },
+        column: {
+            borderWidth: 0
+        },
+        spline: {
+            marker: {
+                enabled: false
+            }
+        },
+        area: {
+            marker: {
+                enabled: false
+            }
+        }
+    },
+    rangeSelector: {
+        buttonTheme: {
+            fill: '#2c323d',
+            r: 5,
+            width: 30,
+            style: {
+                color: 'white',
+                fontWeight: 'bold',
+            },
+            states: {
+                hover: {
+                    fill: '#3f444e',
+                    style: {
+                        color: 'white'
+                    }
+                },
+                select: {
+                    fill: '#90cdf4',
+                    style: {
+                        color: '#171923'
+                    }
+                }
+            }
+        },
+        labelStyle: {
+            color: '#b1b1b1',
+            fontWeight: 'bold'
+        },
+        inputStyle: {
+            color: '#b1b1b1'
+        }
+    },
+    legend: {
+        itemStyle: { 'color': '#eeefef' },
+        itemHoverStyle: {
+            color: '#b1b1b1'
+        }
+    },
+    title: {
+        text: ''
+    },
+    tooltip: {
+        shared: true,
+        split: false,
+        followPointer: true,
+        backgroundColor: '#171923',
+        style: {
+            color: 'white',
+            fontWeight: 'normal'
+        },
+        animation: 0,
+        useHTML: true,
+        formatter() {
+            const chart = this;
+
+            return `<span style="font-size: 18px">${(new Date(chart.x)).toDateString()}</span><hr style="margin-top: 5px; margin-bottom: 5px;"/>${chart.points
+                .filter(point => point.series.type !== 'arearange')
+                .sort((pointA, pointB) => (pointB.y || 0) - (pointA.y || 0))
+                .map((point) => {
+                    const val = Math.round(Number(point.y) || 0).toLocaleString();
+                    return `<div style="text-align: center">
+                                    <span style="color: ${point.color}; font-size: 16px"> ${truncateText(point.series.name)}: <strong>${val}</strong></span>
+                                </div>`;
+                })
+                .join("\n")}`;
+        },
+    },
+    xAxis: {
+        labels: {
+            style: {
+                color: "#b1b1b1"
+            }
+        }
+    },
+    yAxis: {
+        opposite: false,
+        gridLineColor: '#2c323d',
+        labels: {
+            style: {
+                color: "#b1b1b1"
+            }
+        },
+        title: ""
+    }
+};
 
 function ChartPage() {
     // URL parameters
@@ -79,145 +216,6 @@ function ChartPage() {
     const [pointInterval, setPointInterval] = useState(undefined);
 
 
-    const baseChartOptions = {
-        chart: {
-            backgroundColor: '#1a202c',
-        },
-        navigator: {
-            outlineColor: '#3f444e',
-            series: {
-                color: '#90cdf4',
-                lineColor: '#90cdf4'
-            },
-            xAxis: {
-                gridLineColor: '#3f444e',
-                labels: {
-                    style: {
-                        color: '#b1b1b1'
-                    }
-                }
-            },
-            handles: {
-                backgroundColor: '#3f444e',
-                borderColor: '#90cdf4'
-            }
-        },
-        scrollbar: {
-            barBackgroundColor: '#2c323d',
-            trackBackgroundColor: '#171923',
-            trackBorderColor: '#171923',
-            buttonBackgroundColor: '#2c323d',
-            buttonBorderColor: '#3f444e',
-            buttonArrowColor: '#b1b1b1',
-            rifleColor: '#b1b1b1',
-            height: 5
-        },
-        plotOptions: {
-            line: {
-                marker: {
-                    enabled: false
-                }
-            },
-            column: {
-                borderWidth: 0
-            },
-            spline: {
-                marker: {
-                    enabled: false
-                }
-            },
-            area: {
-                marker: {
-                    enabled: false
-                }
-            }
-        },
-        rangeSelector: {
-            buttonTheme: {
-                fill: '#2c323d',
-                r: 5,
-                width: 30,
-                style: {
-                    color: 'white',
-                    fontWeight: 'bold',
-                },
-                states: {
-                    hover: {
-                        fill: '#3f444e',
-                        style: {
-                            color: 'white'
-                        }
-                    },
-                    select: {
-                        fill: '#90cdf4',
-                        style: {
-                            color: '#171923'
-                        }
-                    }
-                }
-            },
-            labelStyle: {
-                color: '#b1b1b1',
-                fontWeight: 'bold'
-            },
-            inputStyle: {
-                color: '#b1b1b1'
-            }
-        },
-        legend: {
-            itemStyle: { 'color': '#eeefef' },
-            itemHoverStyle: {
-                color: '#b1b1b1'
-            }
-        },
-        title: {
-            text: ''
-        },
-        tooltip: {
-            shared: true,
-            split: false,
-            followPointer: true,
-            backgroundColor: '#171923',
-            style: {
-                color: 'white',
-                fontWeight: 'normal'
-            },
-            animation: 0,
-            useHTML: true,
-            formatter() {
-                const chart = this;
-
-                return `<span style="font-size: 18px">${(new Date(chart.x)).toDateString()}</span><hr style="margin-top: 5px; margin-bottom: 5px;"/>${chart.points
-                    .filter(point => point.series.type !== 'arearange')
-                    .sort((pointA, pointB) => (pointB.y || 0) - (pointA.y || 0))
-                    .map((point) => {
-                        const val = Math.round(Number(point.y) || 0).toLocaleString();
-                        return `<div style="text-align: center">
-                                        <span style="color: ${point.color}; font-size: 16px"> ${truncateText(point.series.name)}: <strong>${val}</strong></span>
-                                    </div>`;
-                    })
-                    .join("\n")}`;
-            },
-        },
-        xAxis: {
-            labels: {
-                style: {
-                    color: "#b1b1b1"
-                }
-            }
-        },
-        yAxis: {
-            opposite: false,
-            gridLineColor: '#2c323d',
-            labels: {
-                style: {
-                    color: "#b1b1b1"
-                }
-            },
-            title: ""
-        }
-    };
-
     const seriesData = useMemo(() => {
         if (!scrobblingData) return [];
 
@@ -228,7 +226,9 @@ function ChartPage() {
             let data = [...scrobbleItem[dataPresentationMode]];
 
             if (alignedToFirstScrobble) {
-                data = calculateAlignedDataset(data);
+                const firstScrobbleIndex = scrobbleItem.noncumulativeScrobbleData.findIndex(playcount => playcount > 0);
+                const leadingValue = dataPresentationMode === 'periodRankingPositions' ? null : 0;
+                data = calculateAlignedDataset(data, firstScrobbleIndex, leadingValue);
             }
 
             if (smoothStrength > 0) {
@@ -376,9 +376,18 @@ function ChartPage() {
         const actualEndTime = lastPeriod.toUnix * 1000;
         const actualInterval = (actualEndTime - actualStartTime) / scrobblingPeriods.length;
 
+        // Batch progress updates to at most one per animation frame, so the bar animates smoothly
+        // without re-rendering the page for every request that completes in the same frame
+        let latestProgress = 0;
+        let progressFrame = null;
         getScrobblingDataForAllPeriods(username, scrobblingPeriods, dataSource, (progress) => {
-            if (!isCancelled) {
-                setLoadProgress(progress);
+            if (isCancelled) return;
+            latestProgress = progress;
+            if (progressFrame === null) {
+                progressFrame = requestAnimationFrame(() => {
+                    progressFrame = null;
+                    if (!isCancelled) setLoadProgress(latestProgress);
+                });
             }
         })
             .then(response => {
@@ -397,6 +406,7 @@ function ChartPage() {
 
         return () => {
             isCancelled = true;
+            if (progressFrame !== null) cancelAnimationFrame(progressFrame);
         };
     }, [userInfo, dataSource, startDate, timePeriod, username]);
 
@@ -406,20 +416,20 @@ function ChartPage() {
 
         scrobblingData.forEach((period, periodIndex) => {
             period.forEach(item => {
-                const itemName = item.name;
-                if (!itemMap.has(itemName)) {
-                    const newItem = new ScrobbleItem(itemName);
-                    if (dataSource !== 'artist') {
-                        newItem.artist = item.artist?.['#text'] || '';
-                    }
+                const artist = dataSource !== 'artist' ? (item.artist?.['#text'] || '') : null;
+                // Tracks/albums are keyed by name + artist so same-named items from different artists stay separate
+                const itemId = artist ? `${item.name} — ${artist}` : item.name;
+                if (!itemMap.has(itemId)) {
+                    const newItem = new ScrobbleItem(item.name, artist);
+                    newItem.id = itemId;
                     // Initialize empty data arrays
                     newItem.cumulativeScrobbleData = new Array(numPeriods).fill(0);
                     newItem.noncumulativeScrobbleData = new Array(numPeriods).fill(0);
                     newItem.periodRankingPositions = new Array(numPeriods).fill(null);
-                    itemMap.set(itemName, newItem);
+                    itemMap.set(itemId, newItem);
                 }
 
-                const scrobbleItem = itemMap.get(itemName);
+                const scrobbleItem = itemMap.get(itemId);
                 const playcount = parseInt(item.playcount) || 0;
 
                 scrobbleItem.noncumulativeScrobbleData[periodIndex] = playcount;
@@ -504,26 +514,25 @@ function ChartPage() {
 
 
 
-    const clearSeriesData = () => {
-        let activeItemsEmpty = []
-        setActiveItems(activeItemsEmpty)
-    }
+    // Callbacks are memoised so SeriesEntriesSearch (React.memo) only re-renders when its data changes
+    const clearSeriesData = useCallback(() => {
+        setActiveItems([])
+    }, [])
 
-    const resetSeriesData = () => {
-        let activeItemsReset = [0, 1, 2, 3, 4]
-        setActiveItems(activeItemsReset)
-    }
+    const resetSeriesData = useCallback(() => {
+        setActiveItems([0, 1, 2, 3, 4])
+    }, [])
 
-    const removeFromActiveItems = (index) => {
+    const removeFromActiveItems = useCallback((index) => {
         setActiveItems(prev => prev.filter((_, i) => i !== index));
-    }
+    }, [])
 
-    const addToActiveItems = (itemName) => {
-        const index = scrobblingData.findIndex(item => item.name === itemName);
+    const addToActiveItems = useCallback((itemId) => {
+        const index = scrobblingData.findIndex(item => item.id === itemId);
         if (index !== -1) {
             setActiveItems(prev => [...prev, index]);
         }
-    }
+    }, [scrobblingData])
 
     const toggleAlignedToFirstScrobble = () => {
         setAlignedToFirstScrobble(prev => !prev);
