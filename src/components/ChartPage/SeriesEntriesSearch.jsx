@@ -1,5 +1,5 @@
-import { memo, useMemo, useState } from "react";
-import { Box, Text, HStack, Button, Tag, TagLabel, TagCloseButton, Fade } from "@chakra-ui/react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { Box, Text, HStack, Button, Tag, TagLabel, TagCloseButton, Fade, Skeleton } from "@chakra-ui/react";
 import { AutoComplete, AutoCompleteInput, AutoCompleteItem, AutoCompleteList } from "@choc-ui/chakra-autocomplete";
 import { truncateText } from "../../utils/helperFunctions.js";
 
@@ -48,6 +48,16 @@ export const SeriesEntriesSearch = memo(({
     // Changing the AutoComplete's key remounts it, which clears the search input after a selection, Clear All or Reset
     const [searchResetKey, setSearchResetKey] = useState(0);
 
+    // Scroll the pill box to the bottom when an entry is added, so the new pill is visible
+    const pillContainerRef = useRef(null);
+    const previousActiveItemCount = useRef(activeItems.length);
+    useEffect(() => {
+        if (activeItems.length > previousActiveItemCount.current && pillContainerRef.current) {
+            pillContainerRef.current.scrollTop = pillContainerRef.current.scrollHeight;
+        }
+        previousActiveItemCount.current = activeItems.length;
+    }, [activeItems.length]);
+
     // scrobblingData is already sorted by total scrobbles when it is created
     const autoCompleteItems = useMemo(() => {
         if (!scrobblingData) return null;
@@ -90,11 +100,24 @@ export const SeriesEntriesSearch = memo(({
         });
     }, [scrobblingData, activeItems, dataSource]);
 
+    // Skeleton mirrors the loaded layout (search box, buttons, selected entries box) so nothing jumps when it swaps in
     if (!scrobblingData || !chartHasLoaded) {
         return (
-            <Box textAlign="center" p={4}>
-                <Text>Loading data...</Text>
-            </Box>
+            <>
+                <Skeleton h={10} borderRadius={'md'} />
+                <HStack mt={2} mb={2}>
+                    <Skeleton h={8} w={'100%'} borderRadius={'md'} />
+                    <Skeleton h={8} w={'100%'} borderRadius={'md'} />
+                </HStack>
+                <Box bg={'gray.900'} borderRadius={5} mt={2} mb={2} p={2}>
+                    <Skeleton h={3} w={'40%'} mx={1} mt={1} mb={3} />
+                    <Box display={'flex'} flexWrap={'wrap'}>
+                        {[90, 120, 70, 110, 80, 100].map((width, index) => (
+                            <Skeleton key={index} h={6} w={`${width}px`} m={1} borderRadius={'full'} />
+                        ))}
+                    </Box>
+                </Box>
+            </>
         );
     }
 
@@ -111,25 +134,41 @@ export const SeriesEntriesSearch = memo(({
                 <Button onClick={() => { resetSeriesData(); setSearchResetKey(key => key + 1); }} size={'sm'} w={'100%'}>Reset</Button>
             </HStack>
             <Fade in={true}>
-                <Box display={'flex'} flexWrap={'wrap'} mt={2} mb={2}>
-                    {
-                        activeItems.map((item, index) => {
-                            const itemName = scrobblingData[item]?.name || 'Unknown';
-                            return (
-                                <Tag
-                                    title={itemName.length > 17 ? itemName : ""}
-                                    m={1}
-                                    key={item}
-                                    borderRadius={'full'}
-                                    variant={'solid'}
-                                >
-                                    <Box borderRadius={'full'} bg={chartSeriesColours[index % chartSeriesColours.length]} w={4} h={4} ml={-1} mr={1} />
-                                    <TagLabel pb={1} pt={1}>{truncateText(itemName)}</TagLabel>
-                                    <TagCloseButton onClick={() => removeFromActiveItems(index)} />
-                                </Tag>
-                            )
-                        })
-                    }
+                <Box bg={'gray.900'} borderRadius={5} mt={2} mb={2} p={2}>
+                    <Text fontSize={'sm'} color={'gray.400'} px={1} mb={1}>
+                        {`${activeItems.length} selected ${dataSource}${activeItems.length === 1 ? '' : 's'}`}
+                    </Text>
+                    {/* Capped at roughly three rows of pills; any more scroll inside the box */}
+                    <Box
+                        ref={pillContainerRef}
+                        display={'flex'}
+                        flexWrap={'wrap'}
+                        maxH={'124px'}
+                        overflowY={'auto'}
+                        sx={{
+                            scrollbarWidth: 'thin',
+                            scrollbarColor: '#4a5568 transparent'
+                        }}
+                    >
+                        {
+                            activeItems.map((item, index) => {
+                                const itemName = scrobblingData[item]?.name || 'Unknown';
+                                return (
+                                    <Tag
+                                        title={itemName.length > 17 ? itemName : ""}
+                                        m={1}
+                                        key={item}
+                                        borderRadius={'full'}
+                                        variant={'solid'}
+                                    >
+                                        <Box borderRadius={'full'} bg={chartSeriesColours[index % chartSeriesColours.length]} w={4} h={4} ml={-1} mr={1} />
+                                        <TagLabel pb={1} pt={1}>{truncateText(itemName)}</TagLabel>
+                                        <TagCloseButton onClick={() => removeFromActiveItems(index)} />
+                                    </Tag>
+                                )
+                            })
+                        }
+                    </Box>
                 </Box>
             </Fade>
         </>

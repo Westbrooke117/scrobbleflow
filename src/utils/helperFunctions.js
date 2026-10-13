@@ -42,8 +42,8 @@ const MS_PER_DAY = 86400000;
 const DAYS_PER_MONTH = 30.44;
 const DAYS_PER_YEAR = 365.25;
 
-// Long form for tooltips, e.g. "12 days", "5 months", "2.5 years"
-const formatTimeSinceFirstScrobble = (elapsedMs) => {
+// Long form for a length of time, e.g. "12 days", "5 months", "2.5 years"
+const formatDuration = (elapsedMs) => {
     const days = Math.round(elapsedMs / MS_PER_DAY);
     if (days < 60) return `${days} ${days === 1 ? 'day' : 'days'}`;
 
@@ -65,4 +65,4 @@ const formatElapsedAxisLabel = (elapsedMs, axisSpanMs) => {
     return `${Math.round(days / DAYS_PER_YEAR * 10) / 10}y`;
 }
 
-export {truncateText, deepCopy, getStartDateFromTimePeriod, convertTimePeriodToFullDescription, formatTimeSinceFirstScrobble, formatElapsedAxisLabel}
+export {truncateText, deepCopy, getStartDateFromTimePeriod, convertTimePeriodToFullDescription, formatDuration, formatElapsedAxisLabel}

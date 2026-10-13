@@ -1,4 +1,6 @@
 import { Box, Text, Flex, Checkbox } from "@chakra-ui/react";
+import { SlidersHorizontal } from "lucide-react";
+import { OptionsBoxHeading } from "./OptionsBoxHeading.jsx";
 
 export const MiscellaneousOptions = ({
     alignedToFirstScrobble,
@@ -12,7 +14,7 @@ export const MiscellaneousOptions = ({
     return (
         <Box mb={2} mt={2}>
             <Box bg={'gray.900'} pl={5} pr={5} pt={2} pb={2} borderRadius={5}>
-                <Text fontSize={20} mb={1}>Miscellaneous</Text>
+                <OptionsBoxHeading icon={SlidersHorizontal}>Miscellaneous</OptionsBoxHeading>
                 <hr />
                 <Flex mt={1} alignItems="center">
                     <Text>Align data to first scrobble</Text>
