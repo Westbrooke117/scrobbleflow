@@ -734,7 +734,9 @@ function ChartPage() {
                                 <ChartSettings
                                     dataPresentationMode={dataPresentationMode}
                                     setDataPresentationMode={setDataPresentationMode}
+                                    chartType={chartType}
                                     setChartType={setChartType}
+                                    stackingType={stackingType}
                                     setStackingType={setStackingType}
                                 />
                                 <CustomDivider text={'Series Entries'} />
