@@ -9,7 +9,7 @@ const MIN_LOADING_MS = 300;
 // Waits for the next paint, so the spinner is on screen before a synchronous export blocks the main thread
 const nextPaint = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
-export const ExportOptions = ({ isDisabled, seriesCount, dataPointCount, onExportCsv, onExportImage }) => {
+export const ExportOptions = ({ isDisabled, onExportCsv, onExportImage }) => {
     const [isExportingCsv, setIsExportingCsv] = useState(false);
     const [isExportingImage, setIsExportingImage] = useState(false);
 

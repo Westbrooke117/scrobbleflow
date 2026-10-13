@@ -4,7 +4,7 @@ import {
     AccordionIcon,
     AccordionItem,
     Avatar, Box, Button,
-    FormControl, FormLabel, HStack, Input, InputGroup, InputLeftAddon, Select,
+    FormControl, HStack, Input, InputGroup, InputLeftAddon, Select,
     Text
 } from "@chakra-ui/react";
 import PropTypes from "prop-types";
@@ -12,7 +12,7 @@ import {useState} from "react";
 import {motion} from "framer-motion";
 import {useParams} from "react-router-dom";
 import {useNavigate} from "react-router-dom";
-import {convertTimePeriodToFullDescription, getStartDateFromTimePeriod} from "../utils/helperFunctions.js";
+import {getStartDateFromTimePeriod} from "../utils/helperFunctions.js";
 
 // Slides the panel down into view with an expo ease-out (launches fast, then decelerates hard into place).
 // Closing slides it back up with a quick cubic ease-out. It's hidden once closed so it can't be tabbed to.
@@ -23,7 +23,7 @@ const panelSlideVariants = {
     closed: { y: '-100%', transition: { duration: 0.2, ease: EASE_OUT_CUBIC }, transitionEnd: { visibility: 'hidden' } }
 };
 
-const UserInfoAccordion = ({userInfo, setDataSource, setUsername, currentInputUsername, setCurrentInputUsername, setStartDate, setTimePeriod, isOpen, onOpenChange}) => {
+const UserInfoAccordion = ({userInfo, setDataSource, setUsername, setStartDate, setTimePeriod, isOpen, onOpenChange}) => {
     const navigate = useNavigate();
     const params = useParams();
 
@@ -86,7 +86,6 @@ const UserInfoAccordion = ({userInfo, setDataSource, setUsername, currentInputUs
                                     <Button colorScheme={'blue'} pl={7} pr={7} onClick={() => {
                                         onOpenChange(false)
                                         navigate(`/chart/${inputValue}/${selectedDataSource}/${selectedTimeRange}`)
-                                        setCurrentInputUsername(inputValue)
                                         setUsername(inputValue)
                                         setDataSource(selectedDataSource)
                                         setTimePeriod(selectedTimeRange)
@@ -115,8 +114,6 @@ UserInfoAccordion.propTypes = {
     setDataSource: PropTypes.func.isRequired,
     hasLoaded: PropTypes.bool.isRequired,
     setUsername: PropTypes.func.isRequired,
-    currentInputUsername: PropTypes.string.isRequired,
-    setCurrentInputUsername: PropTypes.func.isRequired,
     isOpen: PropTypes.bool.isRequired,
     onOpenChange: PropTypes.func.isRequired,
 }

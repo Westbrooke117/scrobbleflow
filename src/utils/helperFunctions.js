@@ -26,18 +26,6 @@ const getStartDateFromTimePeriod = (timePeriod) => {
     return (new Date(Date.now() - (timePeriodToDays[timePeriod] * 86400000)))
 }
 
-const convertTimePeriodToFullDescription = (timePeriodName) => {
-    const timePeriodToFullDescription = {
-        "overall" : "All time", // Instead use user registration date later
-        "lastyear" : "Last 365 days",
-        "6month" : "Last 180 days",
-        "3month" : "Last 90 days",
-        "lastmonth" : "Last 30 days",
-    }
-
-    return timePeriodToFullDescription[timePeriodName]
-}
-
 const MS_PER_DAY = 86400000;
 const DAYS_PER_MONTH = 30.44;
 const DAYS_PER_YEAR = 365.25;
@@ -65,4 +53,4 @@ const formatElapsedAxisLabel = (elapsedMs, axisSpanMs) => {
     return `${Math.round(days / DAYS_PER_YEAR * 10) / 10}y`;
 }
 
-export {truncateText, deepCopy, getStartDateFromTimePeriod, convertTimePeriodToFullDescription, formatDuration, formatElapsedAxisLabel}
+export {truncateText, deepCopy, getStartDateFromTimePeriod, formatDuration, formatElapsedAxisLabel}

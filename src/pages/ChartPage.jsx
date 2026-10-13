@@ -247,7 +247,6 @@ function ChartPage() {
     // API info state
     const [userInfo, setUserInfo] = useState();
     const [scrobblingData, setScrobblingData] = useState();
-    const [currentInputUsername, setCurrentInputUsername] = useState(user)
     const [timePeriod, setTimePeriod] = useState(urlTimePeriod)
     const [username, setUsername] = useState(user)
     const [loadingText, setLoadingText] = useState('')
@@ -615,17 +614,10 @@ function ChartPage() {
         const ageInSeconds = currentUnixSeconds - validStartDate;
         const ageInDays = Math.floor(ageInSeconds / 86400);
 
-        let periodLengthSeconds;
-        let actualNumberOfPeriods;
-
         // If the account is newer than the requested number of periods, use 1 period per day instead
-        if (ageInDays < numberOfScrobblePeriods) {
-            actualNumberOfPeriods = Math.max(ageInDays, 1);
-            periodLengthSeconds = 86400;
-        } else {
-            actualNumberOfPeriods = numberOfScrobblePeriods;
-            periodLengthSeconds = Math.floor(ageInSeconds / numberOfScrobblePeriods);
-        }
+        const periodLengthSeconds = ageInDays < numberOfScrobblePeriods
+            ? 86400
+            : Math.floor(ageInSeconds / numberOfScrobblePeriods);
 
         let scrobblingPeriods = [];
 
@@ -681,18 +673,6 @@ function ChartPage() {
         setAlignedToFirstScrobble(prev => !prev);
     }
 
-    // Summary shown in the export box. Forecast and error-margin series are linked to a main series
-    // and aren't counted; data points are the non-empty values across the main series
-    const exportStats = useMemo(() => {
-        const mainSeries = seriesData.filter(series => !series.linkedTo);
-        return {
-            seriesCount: mainSeries.length,
-            dataPointCount: mainSeries.reduce(
-                (total, series) => total + series.data.filter(value => value !== null && value !== undefined).length, 0
-            )
-        };
-    }, [seriesData]);
-
     const exportFilename = `scrobbleflow-${username}-${dataSource}-${timePeriod}`;
 
     const handleExportCsv = () => {
@@ -738,8 +718,6 @@ function ChartPage() {
                             setStartDate={setStartDate}
                             setTimePeriod={setTimePeriod}
                             setUsername={setUsername}
-                            currentInputUsername={currentInputUsername}
-                            setCurrentInputUsername={setCurrentInputUsername}
                             isOpen={userInfoOpen}
                             onOpenChange={setUserInfoOpen}
                         />
@@ -801,8 +779,6 @@ function ChartPage() {
                                 <CustomDivider text={'Export'} />
                                 <ExportOptions
                                     isDisabled={!chartHasLoaded}
-                                    seriesCount={exportStats.seriesCount}
-                                    dataPointCount={exportStats.dataPointCount}
                                     onExportCsv={handleExportCsv}
                                     onExportImage={handleExportImage}
                                 />

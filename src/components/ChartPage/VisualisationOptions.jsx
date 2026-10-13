@@ -1,4 +1,4 @@
-import { Box, Text, Slider, SliderTrack, SliderFilledTrack, SliderThumb, Flex, Checkbox } from "@chakra-ui/react";
+import { Box, Text, Slider, SliderTrack, SliderFilledTrack, SliderThumb } from "@chakra-ui/react";
 import { Waves } from "lucide-react";
 import { OptionsBoxHeading } from "./OptionsBoxHeading.jsx";
 import { getSmoothStrengthLabel } from "../../utils/chartUtils.js";
