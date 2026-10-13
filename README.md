@@ -2,7 +2,7 @@
 
 ---
 
-An interactive data visualisation tool built to explore and analyse your Last.fm listening history. ScrobbleFlow uses your scrobbles to create interactive timelines and detailed charts, giving you a detailed view into your artist, album, and track listening history.
+An interactive data visualisation tool built to explore and analyse your Last.fm listening history. ScrobbleFlow uses your scrobbles to create interactive timelines and detailed charts, giving you a new view into your artist, album, and track listening history.
 
 **Try it out at** https://westbrooke117.github.io/scrobbleflow/
 
