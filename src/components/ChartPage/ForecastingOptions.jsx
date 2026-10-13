@@ -1,4 +1,16 @@
+import { useEffect, useState } from "react";
 import { Box, Text, Flex, Checkbox, Slider, SliderTrack, SliderFilledTrack, SliderThumb } from "@chakra-ui/react";
+import { TrendingUp } from "lucide-react";
+import { OptionsBoxHeading } from "./OptionsBoxHeading.jsx";
+import { formatDuration } from "../../utils/helperFunctions.js";
+
+const MIN_LOOKBACK = 5;
+
+// e.g. "3 months (30 periods)", or just "30 periods" before the data has loaded
+const describePeriods = (periods, pointInterval) => {
+    const periodText = `${periods} ${periods === 1 ? 'period' : 'periods'}`;
+    return pointInterval ? `${formatDuration(periods * pointInterval)} (${periodText})` : periodText;
+};
 
 export const ForecastingOptions = ({
     forecastingEnabled,
@@ -9,24 +21,42 @@ export const ForecastingOptions = ({
     setForecastLength,
     showMarginOfError,
     setShowMarginOfError,
-    pointInterval
+    pointInterval,
+    availablePeriods,
+    isUnavailable
 }) => {
-    const intervalLabel = pointInterval === 86400000 ? 'days' : pointInterval === 604800000 ? 'weeks' : 'periods';
+    // The sliders are controlled by local state so their labels update while dragging;
+    // the chart only recalculates when a slider is released
+    const maxLookback = Math.max(MIN_LOOKBACK, availablePeriods || 150);
+    const [lookbackDraft, setLookbackDraft] = useState(Math.min(forecastHistory, maxLookback));
+    const [lengthDraft, setLengthDraft] = useState(forecastLength);
+    useEffect(() => setLookbackDraft(Math.min(forecastHistory, maxLookback)), [forecastHistory, maxLookback]);
+    useEffect(() => setLengthDraft(forecastLength), [forecastLength]);
 
     return (
         <Box mb={2} mt={2}>
             <Box bg={'gray.900'} pl={5} pr={5} pt={2} pb={2} borderRadius={5}>
-                <Text fontSize={20} mb={1}>Forecasting</Text>
+                <OptionsBoxHeading icon={TrendingUp}>Forecasting</OptionsBoxHeading>
                 <hr />
                 <Flex mt={1} alignItems="center">
-                    <Text>Enable Forecasting</Text>
-                    <Checkbox ml={2} isChecked={forecastingEnabled} onChange={(e) => setForecastingEnabled(e.target.checked)} />
+                    <Text color={isUnavailable ? 'gray.500' : undefined}>Enable Forecasting</Text>
+                    <Checkbox ml={2} isChecked={forecastingEnabled && !isUnavailable} isDisabled={isUnavailable} onChange={(e) => setForecastingEnabled(e.target.checked)} />
                 </Flex>
-                {forecastingEnabled && (
+                {isUnavailable && (
+                    <Text fontSize={'sm'} color={'gray.400'}>Not available for rankings</Text>
+                )}
+                {forecastingEnabled && !isUnavailable && (
                     <>
                         <Box mt={1}>
-                            <Text mt={1}>History lookback: {forecastHistory} {intervalLabel}</Text>
-                            <Slider defaultValue={forecastHistory} min={5} max={150} step={5} onChangeEnd={(val) => setForecastHistory(val)}>
+                            <Text mt={1}>Based on the last {describePeriods(lookbackDraft, pointInterval)}</Text>
+                            <Slider
+                                value={lookbackDraft}
+                                min={MIN_LOOKBACK}
+                                max={maxLookback}
+                                step={1}
+                                onChange={setLookbackDraft}
+                                onChangeEnd={setForecastHistory}
+                            >
                                 <SliderTrack>
                                     <SliderFilledTrack />
                                 </SliderTrack>
@@ -34,8 +64,15 @@ export const ForecastingOptions = ({
                             </Slider>
                         </Box>
                         <Box mt={1}>
-                            <Text mt={1}>Forecast length: {forecastLength} {intervalLabel}</Text>
-                            <Slider defaultValue={forecastLength} min={1} max={50} step={1} onChangeEnd={(val) => setForecastLength(val)}>
+                            <Text mt={1}>Forecast {describePeriods(lengthDraft, pointInterval)} ahead</Text>
+                            <Slider
+                                value={lengthDraft}
+                                min={1}
+                                max={50}
+                                step={1}
+                                onChange={setLengthDraft}
+                                onChangeEnd={setForecastLength}
+                            >
                                 <SliderTrack>
                                     <SliderFilledTrack />
                                 </SliderTrack>
@@ -43,7 +80,7 @@ export const ForecastingOptions = ({
                             </Slider>
                         </Box>
                         <Flex mt={1} alignItems="center">
-                            <Text>Show Margin of Error</Text>
+                            <Text>Show likely range</Text>
                             <Checkbox ml={2} isChecked={showMarginOfError} onChange={(e) => setShowMarginOfError(e.target.checked)} />
                         </Flex>
                     </>

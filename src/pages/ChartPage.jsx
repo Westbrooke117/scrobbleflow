@@ -1,11 +1,17 @@
 import '../App.css'
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { getScrobblingDataForAllPeriods, getUserInfo } from "../api/api.js";
+import { AnimatePresence, motion } from "framer-motion";
 import Highcharts from 'highcharts/highstock'
 import HighchartsMore from 'highcharts/highcharts-more'
+import HighchartsExporting from 'highcharts/modules/exporting'
+import HighchartsOfflineExporting from 'highcharts/modules/offline-exporting'
 import HighchartsReact from "highcharts-react-official";
 import { calculateForecast } from "../utils/forecastingUtils.js";
+import { exportChartAsCsv, exportChartAsImage } from "../utils/exportUtils.js";
 HighchartsMore(Highcharts)
+HighchartsExporting(Highcharts)
+HighchartsOfflineExporting(Highcharts)
 import {
     HStack,
     Text,
@@ -20,7 +26,7 @@ import { useParams } from "react-router-dom";
 import { CustomDivider } from "../components/CustomDivider.jsx";
 import {
     formatElapsedAxisLabel,
-    formatTimeSinceFirstScrobble,
+    formatDuration,
     getStartDateFromTimePeriod,
     truncateText
 } from "../utils/helperFunctions.js";
@@ -31,7 +37,7 @@ import {
     smoothDataset,
     chartSeriesColours
 } from "../utils/chartUtils.js";
-import { saveToLocalStorage } from "../utils/localStorageManager.js";
+import { getStoredSetting, saveToLocalStorage } from "../utils/localStorageManager.js";
 import { ScrobbleItem } from "../utils/ScrobbleItem.js";
 
 // Extracted Components
@@ -40,6 +46,7 @@ import { VisualificationOptions as VisualisationOptions } from "../components/Ch
 import { ForecastingOptions } from "../components/ChartPage/ForecastingOptions.jsx";
 import { MiscellaneousOptions } from "../components/ChartPage/MiscellaneousOptions.jsx";
 import { SeriesEntriesSearch } from "../components/ChartPage/SeriesEntriesSearch.jsx";
+import { ExportOptions } from "../components/ChartPage/ExportOptions.jsx";
 
 
 const baseChartOptions = {
@@ -136,6 +143,17 @@ const baseChartOptions = {
     title: {
         text: ''
     },
+    // Exporting is triggered from the sidebar, so hide the built-in menu button and never send chart
+    // data to the Highcharts export server if local rendering fails
+    exporting: {
+        buttons: {
+            contextButton: {
+                enabled: false
+            }
+        },
+        fallbackToExportServer: false,
+        error: () => alert('Sorry, the chart image could not be created in this browser.')
+    },
     tooltip: {
         shared: true,
         split: false,
@@ -167,15 +185,33 @@ const baseChartOptions = {
     }
 };
 
+const isForecastSeries = (series) => series.options.id?.endsWith('-forecast');
+
+// For a forecast point, the likely range from the matching error-margin series, e.g. " (45 to 60)"
+const describeForecastRange = (point) => {
+    const rangeSeries = point.series.chart.get(point.series.options.id.replace(/-forecast$/, '-error'));
+    const rangePoint = rangeSeries?.points?.find(candidate => candidate.x === point.x);
+    if (!rangePoint) return '';
+    return ` <span style="color: #a0aec0">(${Math.round(rangePoint.low).toLocaleString()} to ${Math.round(rangePoint.high).toLocaleString()})</span>`;
+};
+
 // Tooltip listing each series' value at the hovered point, under the given header
 const buildTooltip = (header, points) => {
-    return `<span style="font-size: 18px">${header}</span><hr style="margin-top: 5px; margin-bottom: 5px;"/>${points
+    const shownPoints = points
+        // The range is shown alongside its forecast, and a forecast's first point repeats the last real value.
+        // (Matched by x: Highstock's point.index isn't reliable here.)
         .filter(point => point.series.type !== 'arearange')
+        .filter(point => !(isForecastSeries(point.series) && point.x === point.series.options.data?.[0]?.[0]));
+    const allForecast = shownPoints.length > 0 && shownPoints.every(point => isForecastSeries(point.series));
+
+    return `<span style="font-size: 18px">${allForecast ? `Forecast: ${header}` : header}</span><hr style="margin-top: 5px; margin-bottom: 5px;"/>${shownPoints
         .sort((pointA, pointB) => (pointB.y || 0) - (pointA.y || 0))
         .map((point) => {
             const val = Math.round(Number(point.y) || 0).toLocaleString();
+            const isForecast = isForecastSeries(point.series);
+            const name = isForecast ? point.series.linkedParent?.name ?? point.series.name : point.series.name;
             return `<div style="text-align: center">
-                            <span style="color: ${point.color}; font-size: 16px"> ${truncateText(point.series.name)}: <strong>${val}</strong></span>
+                            <span style="color: ${point.color}; font-size: 16px"> ${truncateText(name)}: <strong>${val}</strong>${isForecast ? describeForecastRange(point) : ''}</span>
                         </div>`;
         })
         .join("\n")}`;
@@ -187,7 +223,7 @@ function dateTooltipFormatter() {
 
 // When aligned to first scrobble, x values are milliseconds elapsed since the first scrobble
 function elapsedTooltipFormatter() {
-    const header = this.x === 0 ? 'First scrobble' : `${formatTimeSinceFirstScrobble(this.x)} since first scrobble`;
+    const header = this.x === 0 ? 'First scrobble' : `${formatDuration(this.x)} since first scrobble`;
     return buildTooltip(header, this.points);
 }
 
@@ -199,6 +235,10 @@ function elapsedAxisLabelFormatter() {
     return formatElapsedAxisLabel(this.value, this.axis.max - this.axis.min);
 }
 
+const blurFocusedElement = () => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+};
+
 function ChartPage() {
     // URL parameters
     const params = useParams();
@@ -207,7 +247,6 @@ function ChartPage() {
     // API info state
     const [userInfo, setUserInfo] = useState();
     const [scrobblingData, setScrobblingData] = useState();
-    const [currentInputUsername, setCurrentInputUsername] = useState(user)
     const [timePeriod, setTimePeriod] = useState(urlTimePeriod)
     const [username, setUsername] = useState(user)
     const [loadingText, setLoadingText] = useState('')
@@ -225,11 +264,17 @@ function ChartPage() {
     const [navigatorEnabled, setNavigatorEnabled] = useState(() => JSON.parse(localStorage.getItem('navigatorEnabled')) ?? false);
     const [legendEnabled, setLegendEnabled] = useState(() => JSON.parse(localStorage.getItem('legendEnabled')) ?? true);
 
-    // Forecasting state
-    const [forecastingEnabled, setForecastingEnabled] = useState(false);
-    const [forecastHistory, setForecastHistory] = useState(30);
-    const [forecastLength, setForecastLength] = useState(10);
-    const [showMarginOfError, setShowMarginOfError] = useState(true);
+    // Forecasting state, remembered between visits
+    const [forecastingEnabled, setForecastingEnabled] = useState(() => getStoredSetting('forecastingEnabled', false));
+    const [forecastHistory, setForecastHistory] = useState(() => getStoredSetting('forecastHistory', 30));
+    const [forecastLength, setForecastLength] = useState(() => getStoredSetting('forecastLength', 10));
+    const [showMarginOfError, setShowMarginOfError] = useState(() => getStoredSetting('forecastShowRange', true));
+    // Rank positions can't be meaningfully forecast
+    const forecastUnavailable = dataPresentationMode === 'periodRankingPositions';
+    const persistForecastSetting = (name, setter) => (value) => {
+        setter(value);
+        saveToLocalStorage({ name, value });
+    };
 
     // Chart management state
     const [activeItems, setActiveItems] = useState([0, 1, 2, 3, 4]);
@@ -237,6 +282,20 @@ function ChartPage() {
     const [chartHasLoaded, setChartHasLoaded] = useState(false)
     const [pointStart, setPointStart] = useState(undefined);
     const [pointInterval, setPointInterval] = useState(undefined);
+    const chartRef = useRef(null);
+    const [userInfoOpen, setUserInfoOpen] = useState(false);
+
+    // When the forecast is toggled or lengthened while the chart shows its full range, zoom out afterwards
+    // so the whole forecast is visible. A user who has zoomed in keeps their zoom.
+    const showFullRangeAfterUpdate = useRef(false);
+    const withFullRangeKept = (setter, currentValue) => (value) => {
+        const axis = chartRef.current?.chart?.xAxis?.[0];
+        if (axis && value !== currentValue) {
+            const { min, max, dataMin, dataMax } = axis.getExtremes();
+            showFullRangeAfterUpdate.current = min <= dataMin && max >= dataMax;
+        }
+        setter(value);
+    };
 
 
     const seriesData = useMemo(() => {
@@ -270,7 +329,7 @@ function ChartPage() {
                 dashStyle: 'solid'
             }];
 
-            if (forecastingEnabled && pointStart && pointInterval) {
+            if (forecastingEnabled && !forecastUnavailable && pointStart && pointInterval) {
                 const seriesPointStart = alignedToFirstScrobble ? 0 : pointStart;
                 const isCumulative = dataPresentationMode === 'cumulativeScrobbleData';
                 try {
@@ -284,7 +343,10 @@ function ChartPage() {
                             dashStyle: 'dot',
                             zIndex: 2,
                             linkedTo: seriesId,
-                            showInLegend: false
+                            showInLegend: false,
+                            // The navigator draws the first series; continue it with that series' forecast
+                            showInNavigator: index === 0,
+                            navigatorOptions: { dashStyle: 'Dot', fillOpacity: 0.02 }
                         });
 
                         if (showMarginOfError) {
@@ -309,7 +371,19 @@ function ChartPage() {
             }
             return series;
         }).filter(Boolean).flat();
-    }, [scrobblingData, activeItems, dataPresentationMode, alignedToFirstScrobble, smoothStrength, forecastingEnabled, pointStart, pointInterval, forecastHistory, forecastLength, showMarginOfError, dataSource]);
+    }, [scrobblingData, activeItems, dataPresentationMode, alignedToFirstScrobble, smoothStrength, forecastingEnabled, forecastUnavailable, pointStart, pointInterval, forecastHistory, forecastLength, showMarginOfError, dataSource]);
+
+    // Number of periods loaded; the forecast lookback can't use more than this
+    const availablePeriods = scrobblingData?.[0]?.noncumulativeScrobbleData.length;
+
+    // Marks where the forecast starts with a dashed line and shades the forecast region. Not shown when aligned
+    // to first scrobble, since each series then ends (and its forecast starts) at a different point.
+    const forecastRegion = useMemo(() => {
+        const hasForecast = seriesData.some(series => series.id?.endsWith('-forecast'));
+        if (!hasForecast || alignedToFirstScrobble || !availablePeriods) return null;
+        const from = pointStart + (availablePeriods - 1) * pointInterval;
+        return { from, to: from + forecastLength * pointInterval };
+    }, [seriesData, alignedToFirstScrobble, availablePeriods, pointStart, pointInterval, forecastLength]);
 
     const chartOptions = useMemo(() => ({
         ...baseChartOptions,
@@ -338,7 +412,21 @@ function ChartPage() {
             labels: {
                 ...baseChartOptions.xAxis.labels,
                 formatter: alignedToFirstScrobble ? elapsedAxisLabelFormatter : dateAxisLabelFormatter
-            }
+            },
+            // Empty arrays clear the marker when forecasting is turned off
+            plotLines: forecastRegion ? [{
+                value: forecastRegion.from,
+                color: '#718096',
+                dashStyle: 'Dash',
+                width: 1,
+                zIndex: 3,
+                label: { text: 'Forecast', rotation: 0, x: 6, y: 14, style: { color: '#a0aec0', fontSize: '12px' } }
+            }] : [],
+            plotBands: forecastRegion ? [{
+                from: forecastRegion.from,
+                to: forecastRegion.to,
+                color: 'rgba(255, 255, 255, 0.03)'
+            }] : []
         },
         tooltip: {
             ...baseChartOptions.tooltip,
@@ -361,7 +449,14 @@ function ChartPage() {
             }
         },
         series: seriesData
-    }), [seriesData, chartType, navigatorEnabled, legendEnabled, stackingType, pointStart, pointInterval, alignedToFirstScrobble]);
+    }), [seriesData, chartType, navigatorEnabled, legendEnabled, stackingType, pointStart, pointInterval, alignedToFirstScrobble, forecastRegion]);
+
+    // Runs after HighchartsReact has applied the new options (it updates the chart in a layout effect)
+    useEffect(() => {
+        if (!showFullRangeAfterUpdate.current) return;
+        showFullRangeAfterUpdate.current = false;
+        chartRef.current?.chart?.xAxis?.[0]?.setExtremes();
+    }, [chartOptions]);
 
     // Get user info on initial page load / when user changes
     useEffect(() => {
@@ -519,17 +614,10 @@ function ChartPage() {
         const ageInSeconds = currentUnixSeconds - validStartDate;
         const ageInDays = Math.floor(ageInSeconds / 86400);
 
-        let periodLengthSeconds;
-        let actualNumberOfPeriods;
-
         // If the account is newer than the requested number of periods, use 1 period per day instead
-        if (ageInDays < numberOfScrobblePeriods) {
-            actualNumberOfPeriods = Math.max(ageInDays, 1);
-            periodLengthSeconds = 86400;
-        } else {
-            actualNumberOfPeriods = numberOfScrobblePeriods;
-            periodLengthSeconds = Math.floor(ageInSeconds / numberOfScrobblePeriods);
-        }
+        const periodLengthSeconds = ageInDays < numberOfScrobblePeriods
+            ? 86400
+            : Math.floor(ageInSeconds / numberOfScrobblePeriods);
 
         let scrobblingPeriods = [];
 
@@ -585,74 +673,150 @@ function ChartPage() {
         setAlignedToFirstScrobble(prev => !prev);
     }
 
+    const exportFilename = `scrobbleflow-${username}-${dataSource}-${timePeriod}`;
+
+    const handleExportCsv = () => {
+        const chart = chartRef.current?.chart;
+        if (chart) exportChartAsCsv(chart, `${exportFilename}.csv`, alignedToFirstScrobble);
+    }
+
+    const handleExportImage = () => {
+        const chart = chartRef.current?.chart;
+        if (!chart) return;
+        // last.fm returns the avatar in several sizes; 'large' (174px) stays sharp in the 2x export
+        const images = userInfo?.image || [];
+        const avatarUrl = (images.find(image => image.size === 'large') || images[images.length - 1])?.['#text'];
+        return exportChartAsImage(chart, exportFilename, {
+            username: userInfo?.name || username,
+            avatarUrl: avatarUrl || undefined
+        }).catch(error => {
+            console.error('Chart image export failed', error);
+            alert('Sorry, the chart image could not be created in this browser.');
+        });
+    }
+
     return (
         <Container maxW={'100%'} p={0} m={0}>
-            <Grid templateColumns={'repeat(6,1fr)'} h={'100vh'}>
-                <GridItem colSpan={1} className={'sidebar-column'}>
-                    <Box>
+            {/* The page itself never scrolls: the sidebar scrolls on its own and the chart stays in view */}
+            <Grid templateColumns={'minmax(min-content, 1fr) 5fr'} h={'100vh'} overflow={'hidden'}>
+                {/* minmax(min-content, ...) keeps the sidebar as wide as its content needs: a scrolling grid
+                    item would otherwise be allowed to shrink to a sixth of the page and squash the controls */}
+                <GridItem
+                    className={'sidebar-column'}
+                    h={'100vh'}
+                    display={'flex'}
+                    flexDirection={'column'}
+                    overflow={'hidden'}
+                >
+                    {/* Header and user info stay pinned at the top; only the options below them scroll */}
+                    <Box flexShrink={0} position={'relative'} zIndex={2}>
                         <HeaderBar />
+                        <UserInfoAccordion
+                            userInfo={userInfo}
+                            setDataSource={setDataSource}
+                            hasLoaded={chartHasLoaded}
+                            setStartDate={setStartDate}
+                            setTimePeriod={setTimePeriod}
+                            setUsername={setUsername}
+                            isOpen={userInfoOpen}
+                            onOpenChange={setUserInfoOpen}
+                        />
                     </Box>
-                    <UserInfoAccordion
-                        userInfo={userInfo}
-                        setDataSource={setDataSource}
-                        hasLoaded={chartHasLoaded}
-                        setStartDate={setStartDate}
-                        setTimePeriod={setTimePeriod}
-                        setUsername={setUsername}
-                        currentInputUsername={currentInputUsername}
-                        setCurrentInputUsername={setCurrentInputUsername}
-                    />
-                    <Box mt={3} ml={5} mr={5}>
-                        <CustomDivider text={'Chart Settings'} />
-                        <ChartSettings
-                            dataPresentationMode={dataPresentationMode}
-                            setDataPresentationMode={setDataPresentationMode}
-                            setChartType={setChartType}
-                            setStackingType={setStackingType}
-                        />
-                        <CustomDivider text={'Visualisation Options'} />
-                        <VisualisationOptions
-                            smoothStrength={smoothStrength}
-                            setSmoothStrength={setSmoothStrength}
-                        />
-                        <ForecastingOptions
-                            forecastingEnabled={forecastingEnabled}
-                            setForecastingEnabled={setForecastingEnabled}
-                            forecastHistory={forecastHistory}
-                            setForecastHistory={setForecastHistory}
-                            forecastLength={forecastLength}
-                            setForecastLength={setForecastLength}
-                            showMarginOfError={showMarginOfError}
-                            setShowMarginOfError={setShowMarginOfError}
-                            pointInterval={pointInterval}
-                        />
-                        <MiscellaneousOptions
-                            alignedToFirstScrobble={alignedToFirstScrobble}
-                            toggleAlignedToFirstScrobble={toggleAlignedToFirstScrobble}
-                            navigatorEnabled={navigatorEnabled}
-                            setNavigatorEnabled={setNavigatorEnabled}
-                            legendEnabled={legendEnabled}
-                            setLegendEnabled={setLegendEnabled}
-                            saveToLocalStorage={saveToLocalStorage}
-                        />
-                        <CustomDivider text={'Series Entries'} />
-                        <SeriesEntriesSearch
-                            scrobblingData={scrobblingData}
-                            chartHasLoaded={chartHasLoaded}
-                            dataSource={dataSource}
-                            activeItems={activeItems}
-                            addToActiveItems={addToActiveItems}
-                            clearSeriesData={clearSeriesData}
-                            resetSeriesData={resetSeriesData}
-                            removeFromActiveItems={removeFromActiveItems}
-                            chartSeriesColours={chartSeriesColours}
-                        />
+                    <Box flex={1} minH={0} position={'relative'} zIndex={1}>
+                        <Box
+                            h={'100%'}
+                            overflowY={'auto'}
+                            pb={3}
+                            sx={{ scrollbarWidth: 'thin', scrollbarColor: '#4a5568 transparent' }}
+                        >
+                            <Box mt={3} ml={5} mr={5}>
+                                <CustomDivider text={'Chart Settings'} />
+                                <ChartSettings
+                                    dataPresentationMode={dataPresentationMode}
+                                    setDataPresentationMode={setDataPresentationMode}
+                                    chartType={chartType}
+                                    setChartType={setChartType}
+                                    stackingType={stackingType}
+                                    setStackingType={setStackingType}
+                                />
+                                <CustomDivider text={'Series Entries'} />
+                                <SeriesEntriesSearch
+                                    scrobblingData={scrobblingData}
+                                    chartHasLoaded={chartHasLoaded}
+                                    dataSource={dataSource}
+                                    activeItems={activeItems}
+                                    addToActiveItems={addToActiveItems}
+                                    clearSeriesData={clearSeriesData}
+                                    resetSeriesData={resetSeriesData}
+                                    removeFromActiveItems={removeFromActiveItems}
+                                    chartSeriesColours={chartSeriesColours}
+                                />
+                                <CustomDivider text={'Visualisation Options'} />
+                                <VisualisationOptions
+                                    smoothStrength={smoothStrength}
+                                    setSmoothStrength={setSmoothStrength}
+                                />
+                                <ForecastingOptions
+                                    forecastingEnabled={forecastingEnabled}
+                                    setForecastingEnabled={persistForecastSetting('forecastingEnabled', withFullRangeKept(setForecastingEnabled, forecastingEnabled))}
+                                    forecastHistory={forecastHistory}
+                                    setForecastHistory={persistForecastSetting('forecastHistory', setForecastHistory)}
+                                    forecastLength={forecastLength}
+                                    setForecastLength={persistForecastSetting('forecastLength', withFullRangeKept(setForecastLength, forecastLength))}
+                                    showMarginOfError={showMarginOfError}
+                                    setShowMarginOfError={persistForecastSetting('forecastShowRange', setShowMarginOfError)}
+                                    pointInterval={pointInterval}
+                                    availablePeriods={availablePeriods}
+                                    isUnavailable={forecastUnavailable}
+                                />
+                                <MiscellaneousOptions
+                                    alignedToFirstScrobble={alignedToFirstScrobble}
+                                    toggleAlignedToFirstScrobble={toggleAlignedToFirstScrobble}
+                                    navigatorEnabled={navigatorEnabled}
+                                    setNavigatorEnabled={setNavigatorEnabled}
+                                    legendEnabled={legendEnabled}
+                                    setLegendEnabled={setLegendEnabled}
+                                    saveToLocalStorage={saveToLocalStorage}
+                                />
+                                <CustomDivider text={'Export'} />
+                                <ExportOptions
+                                    isDisabled={!chartHasLoaded}
+                                    onExportCsv={handleExportCsv}
+                                    onExportImage={handleExportImage}
+                                />
+                            </Box>
+                        </Box>
+                        {/* Dims the options while the user info panel is open; clicking it closes the panel.
+                            The fade is on the overlay itself rather than a Chakra Fade wrapper: a wrapper with
+                            opacity < 1 forms its own stacking context, so the overlay's z-index wouldn't apply
+                            until the fade finished and the slider thumb (z-index 1) would darken late.
+                            It fades in and disappears instantly when closed, like the panel. */}
+                        <AnimatePresence>
+                            {userInfoOpen && (
+                                <motion.div
+                                    key={'user-info-overlay'}
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1, transition: { duration: 0.2 } }}
+                                    exit={{ opacity: 0, transition: { duration: 0 } }}
+                                    onClick={() => setUserInfoOpen(false)}
+                                    style={{
+                                        position: 'absolute',
+                                        inset: 0,
+                                        // Above controls that set their own z-index, e.g. the slider thumb
+                                        zIndex: 10,
+                                        background: 'rgba(0, 0, 0, 0.48)'
+                                    }}
+                                />
+                            )}
+                        </AnimatePresence>
                     </Box>
                 </GridItem>
-                <GridItem colSpan={5} mt={5} mr={5}>
+                {/* Highcharts prevents the default mousedown action (for drag-to-zoom), which stops the browser
+                    moving focus off the series search input, so its results list would stay open. Blur manually. */}
+                <GridItem h={'100vh'} minW={0} pt={5} pr={5} onMouseDownCapture={blurFocusedElement}>
                     {
                         !chartHasLoaded ?
-                            <HStack w={'100%'} h={'100vh'} justifyContent={'center'} alignItems={'center'} flexDirection={'column'}>
+                            <HStack w={'100%'} h={'100%'} justifyContent={'center'} alignItems={'center'} flexDirection={'column'}>
                                 <Text fontSize={'xl'} mb={4}>{loadingText}</Text>
                                 {!loadingText.includes('Error') && !loadingText.includes('Invalid') && (
                                     <Box w="50%" maxW="400px">
@@ -676,10 +840,11 @@ function ChartPage() {
                                     zoom range from one x-axis scale isn't carried over to the other */}
                                 <HighchartsReact
                                     key={alignedToFirstScrobble ? 'time-since-first-scrobble' : 'dates'}
+                                    ref={chartRef}
                                     highcharts={Highcharts}
                                     constructorType={'stockChart'}
                                     options={chartOptions}
-                                    containerProps={{ style: { height: '97vh' } }}
+                                    containerProps={{ style: { height: 'calc(100vh - 40px)' } }}
                                 />
                             </Fade>
                     }

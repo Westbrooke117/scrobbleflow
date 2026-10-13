@@ -1,96 +1,57 @@
+const Z_95 = 1.96;
+// Periods back at which a period's weight halves. Backtested against linear regression and damped-trend
+// exponential smoothing on real last.fm data: a recency-weighted rate was the most accurate overall and
+// its ranges matched the 95% target, where the others' were too narrow (linear) or too wide (Holt).
+const HALF_LIFE_PERIODS = 20;
+
 /**
- * Calculates a linear regression forecast based on history.
- * @param {number[]} data - The historical data series.
- * @param {number} historyLookback - Number of periods to look back for the trend.
+ * Forecasts a series from the recent per-period rate, weighting recent periods more heavily.
+ * Listening is bursty, so the forecast assumes the recent average rate continues rather than
+ * extrapolating a trend from a short binge or slump.
+ * @param {number[]} data - The displayed series: cumulative totals or per-period counts.
+ * @param {number} historyLookback - Number of periods used to estimate the rate.
  * @param {number} forecastPeriods - Number of periods to forecast forward.
- * @param {boolean} isCumulative - Whether the data is cumulative (non-decreasing).
- * @returns {object|null} { forecastData, marginOfErrorData }
+ * @param {boolean} isCumulative - Whether the data is a running total.
+ * @returns {object|null} { forecastData: [index, value][], marginOfErrorData: [index, low, high][] },
+ * starting at the last real point. The margin is a 95% range.
  */
 export const calculateForecast = (data, historyLookback, forecastPeriods = 10, isCumulative = true) => {
     if (!data || data.length < 2) return null;
 
-    const validPoints = data
-        .map((y, x) => ({ x, y }))
-        .filter(point => point.y !== null && point.y !== undefined);
+    const lastIndex = data.length - 1;
+    const lastValue = data[lastIndex];
+    if (lastValue === null || lastValue === undefined) return null;
 
-    if (validPoints.length < 2) return null;
+    // Work with per-period counts; for cumulative data these are the differences between totals
+    const counts = isCumulative ? data.slice(1).map((value, i) => value - data[i]) : data;
+    const recent = counts.slice(-historyLookback).filter(value => value !== null && value !== undefined);
+    const n = recent.length;
+    if (n < 2) return null;
 
-    const actualLookback = Math.min(historyLookback, validPoints.length);
-    const subset = validPoints.slice(-actualLookback);
+    // Exponentially weighted mean and standard deviation of the recent counts
+    const decay = Math.pow(0.5, 1 / HALF_LIFE_PERIODS);
+    const weights = recent.map((_, i) => Math.pow(decay, n - 1 - i));
+    const weightSum = weights.reduce((sum, w) => sum + w, 0);
+    const rate = recent.reduce((sum, value, i) => sum + weights[i] * value, 0) / weightSum;
+    const effectiveN = (weightSum * weightSum) / weights.reduce((sum, w) => sum + w * w, 0);
+    const weightedVariance = recent.reduce((sum, value, i) => sum + weights[i] * (value - rate) ** 2, 0) / weightSum;
+    const sigma = Math.sqrt(weightedVariance * effectiveN / Math.max(1, effectiveN - 1));
 
-    const n = subset.length;
-    let sumX = 0;
-    let sumY = 0;
-    let sumXY = 0;
-    let sumXX = 0;
+    const forecastData = [[lastIndex, Math.round(lastValue)]];
+    const marginOfErrorData = [[lastIndex, Math.round(lastValue), Math.round(lastValue)]];
 
-    for (let i = 0; i < n; i++) {
-        const x = i;
-        const y = subset[i].y;
-        sumX += x;
-        sumY += y;
-        sumXY += x * y;
-        sumXX += x * x;
-    }
-
-    const denominator = (n * sumXX - sumX * sumX);
-    if (denominator === 0) return null;
-
-    const slope = (n * sumXY - sumX * sumY) / denominator;
-    const intercept = (sumY - slope * sumX) / n;
-
-    let sumSquaredResiduals = 0;
-    for (let i = 0; i < n; i++) {
-        const x = i;
-        const y = subset[i].y;
-        const predictedY = slope * x + intercept;
-        sumSquaredResiduals += Math.pow(y - predictedY, 2);
-    }
-
-    const standardError = Math.sqrt(sumSquaredResiduals / (n - 2 || 1));
-
-    const forecastData = [];
-    const marginOfErrorData = [];
-
-    const lastRealIndex = data.length - 1;
-    const lastRealValue = data[lastRealIndex] !== null ? data[lastRealIndex] : subset[subset.length - 1].y;
-
-    forecastData.push([lastRealIndex, Math.round(lastRealValue)]);
-    marginOfErrorData.push([lastRealIndex, Math.round(lastRealValue), Math.round(lastRealValue)]);
-
-    let currentForecastY = lastRealValue;
-    let currentLowY = lastRealValue;
-
-    for (let i = 1; i <= forecastPeriods; i++) {
-        const relativeX = (n - 1) + i;
-
-        let predictedY = lastRealValue + (slope * i);
-
+    for (let h = 1; h <= forecastPeriods; h++) {
         if (isCumulative) {
-            predictedY = Math.max(currentForecastY, predictedY);
-            currentForecastY = predictedY;
+            // The total after h periods: noise from each period plus uncertainty in the rate itself
+            const total = lastValue + rate * h;
+            const margin = Z_95 * sigma * Math.sqrt(h + (h * h) / effectiveN);
+            forecastData.push([lastIndex + h, Math.round(total)]);
+            marginOfErrorData.push([lastIndex + h, Math.round(Math.max(lastValue, total - margin)), Math.round(total + margin)]);
         } else {
-            predictedY = Math.max(0, predictedY);
+            const margin = Z_95 * sigma * Math.sqrt(1 + 1 / effectiveN);
+            forecastData.push([lastIndex + h, Math.round(rate)]);
+            marginOfErrorData.push([lastIndex + h, Math.round(Math.max(0, rate - margin)), Math.round(rate + margin)]);
         }
-
-        const errorTerm = standardError * Math.sqrt(1 + 1 / n + Math.pow(relativeX - (sumX / n), 2) / denominator);
-        const cappedError = isFinite(errorTerm) ? errorTerm : 0;
-
-        const finalY = Math.round(predictedY);
-
-        let lowValue = predictedY - cappedError * 2;
-        if (isCumulative) {
-            lowValue = Math.max(currentLowY, lowValue);
-            currentLowY = lowValue;
-        } else {
-            lowValue = Math.max(0, lowValue);
-        }
-
-        const low = Math.round(lowValue);
-        const high = Math.round(predictedY + cappedError * 2);
-
-        forecastData.push([lastRealIndex + i, finalY]);
-        marginOfErrorData.push([lastRealIndex + i, low, high]);
     }
 
     return { forecastData, marginOfErrorData };
